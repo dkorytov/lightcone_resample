@@ -1,0 +1,5 @@
+
+
+lc_data_fname /cosmo/homes/dkorytov/proj/sdss_galacticus_resample/input/logsm_9p5_testing_catalog_for_dtk_with_fake_sdss.hdf5
+gal_prop_fname /cosmo/homes/dkorytov/proj/protoDC2/output/ANL_box_v2.1.3_nocut_steps_old/487.hdf5
+output_loc output/test.hdf5
