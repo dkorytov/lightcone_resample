@@ -1,5 +1,4 @@
 #!/usr/bin/env python2.7
-
 from __future__ import print_function, division
 
 import numpy as np
@@ -27,12 +26,11 @@ def construct_gal_prop(fname,verbose=False,mask = None,mag_r_cut = False):
     mag_g = hgp['SDSS_filters/magnitude:SDSS_g:rest:dustAtlas'].value
     mag_r = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
     mag_i = hgp['SDSS_filters/magnitude:SDSS_i:rest:dustAtlas'].value
-    if mask == None:
+    if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
         #TODO check
-        mask = (mag_r < -12) & mask
-        raise
+        mask = (mag_r < -10) & mask
     gal_prop['m_star'] = m_star[mask]
     gal_prop['Mag_r']  = mag_r[mask]
     gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
@@ -45,12 +43,17 @@ def construct_gal_prop(fname,verbose=False,mask = None,mag_r_cut = False):
 def construct_lc_data(fname,verbose = False):
     t1 = time.time()
     lc_data = {}
-    sdss = Table.read(fname,path='data')
-    print(sdss.keys())
-    lc_data['m_star'] = np.log10(sdss['obs_sm'].quantity)
-    lc_data['Mag_r']  = sdss['rmag'].quantity
-    lc_data['clr_gr'] = sdss['sdss_petrosian_gr'].quantity
-    lc_data['clr_ri'] = sdss['sdss_petrosian_ri'].quantity
+    #tbl = Table.read(fname,path='data')
+    hfile = h5py.File(fname,'r')
+    # lc_data['m_star'] = np.log10(sdss['obs_sm'].quantity)
+    # lc_data['Mag_r']  = sdss['rmag'].quantity
+    # lc_data['clr_gr'] = sdss['sdss_petrosian_gr'].quantity
+    # lc_data['clr_ri'] = sdss['sdss_petrosian_ri'].quantity
+    lc_data['m_star'] = np.log10(hfile['obs_sm'].value)
+    lc_data['Mag_r'] = hfile['restframe_extincted_sdss_abs_magr'].value
+    lc_data['clr_gr'] = hfile['restframe_extincted_sdss_gr'].value
+    lc_data['clr_ri'] = hfile['restframe_extincted_sdss_ri'].value
+    lc_data['redshift'] = hfile['redshift'].value
     if verbose:
         print('done loading lc data. {}'.format(time.time()-t1))
     return lc_data
@@ -133,8 +136,6 @@ def copy_columns_slope(input_fname, input_slope_fname,
     lc_a = 1.0/(1.0+lc_redshift)
     input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-input_a
-    if mask is not None:
-        del_a = del_a[mask]
     h_in = h5py.File(input_fname,'r')
     h_in_slope = h5py.File(input_slope_fname,'r')
     h_out = h5py.File(output_fname,'w')
@@ -154,7 +155,7 @@ def copy_columns_slope(input_fname, input_slope_fname,
         if mask is not None:
             data = data[mask]
             slope = slope[mask]
-        new_data = data[index] + slope[index]*del_a[index]
+        new_data = data[index] + slope[index]*del_a
         #TODO Does anything need to stored as double?
         slct_finite = np.isfinite(new_data)
         if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
@@ -168,30 +169,25 @@ def copy_columns_slope(input_fname, input_slope_fname,
 
 
 def overwrite_columns(input_fname, output_fname,verbose=False):
-    t1 = time.time()a
+    t1 = time.time()
     if verbose:
         print("Overwriting columns.")
-    sdss = Table.read(input_fname,path='data')
-    redshift = np.ones(sdss['x'].quantity.size)*0.1
+        #sdss = Table.read(input_fname,path='data')
+    h_in = h5py.File(input_fname,'r')
+    #redshift = np.ones(sdss['x'].quantity.size)*0.1
     h_out = h5py.File(output_fname, 'a')
     h_out_gp = h_out['galaxyProperties']
     t2 = time.time()
     if verbose:
         print("\t done reading in data", t2-t1)
     #xyz,v(xyz)
-    x=sdss['x'].quantity
-    y=sdss['y'].quantity
-    z=sdss['z'].quantity
-    vx=sdss['vx'].quantity
-    vy=sdss['vy'].quantity
-    vz=sdss['vz'].quantity
 
-    h_out_gp['x'][:]=x 
-    h_out_gp['y'][:]=y
-    h_out_gp['z'][:]=z
-    h_out_gp['vx'][:]=vx
-    h_out_gp['vy'][:]=vy
-    h_out_gp['vz'][:]=vz
+    h_out_gp['x'][:]=h_in['x'].value
+    h_out_gp['y'][:]=h_in['y'].value
+    h_out_gp['z'][:]=h_in['z'].value
+    h_out_gp['vx'][:]=h_in['vx'].value
+    h_out_gp['vy'][:]=h_in['vy'].value
+    h_out_gp['vz'][:]=h_in['vz'].value
     t3 = time.time()
     if verbose:
         print("\t done overwriting xyz, v_(xyz)",t3-t2)
@@ -203,21 +199,38 @@ def overwrite_columns(input_fname, output_fname,verbose=False):
     stepz = dtk.StepZ(200,0,500)
     zs = np.linspace(0,1.5,1000)
     z_to_dl = interp1d(zs,cosmo.luminosity_distance(zs))
-    redshift_org = h_out_gp['redshiftHubble'].value
-    redshift_new = redshift
-    dl_org = z_to_dl(redshift_org)
-    adjust_org = -2.5*np.log10(1.0+redshift_org) + 5*np.log10(dl_org)
-    dl_new = z_to_dl(redshift_new)
-    adjust_new = -2.5*np.log10(1.0+redshift_new) + 5*np.log10(dl_new)
-    t4 = time.time()
-    if verbose:
-        print("\t done calculating mag adjustment")
-    adjust_tot = -adjust_org + adjust_new
+    dl = z_to_dl(redshift)
+    adjust_mag = -2.5*np.log10(1.0+redshifts)+5*np.log10(dl)+25.0
     keys = get_keys(h_out_gp)
     for key in keys:
-        if "magnitude" in key and "observed" in key:
-            print("\t\tadjusting mag: {}".format(key))
-            h_out_gp[key][:] = h_out_gp[key].value + adjust_tot
+        # Calculating new observer frame magnitudes
+        if("totalLuminositiesStellar" in key and  ":observed" in key and ("SDSS" in key or "LSST" in key)):
+            key_base = key.replace("totalLuminositiesStellar","",1)
+            new_key  = 'magnitude'+key_base
+            print("making: "+new_key)
+            hfile[new_key][:]=adjust_mag -2.5*np.log10(hfile[key].value)
+        # Calculating new rest frame magnitudes
+        if("totalLuminositiesStellar" in key and  ":rest" in key and ("SDSS" in key or "LSST" in key)):
+            key_base = key.replace("totalLuminositiesStellar","",1)
+            new_key ="magnitude"+key_base
+            print("making: "+new_key)
+            hfile[new_key][:]=-2.5*np.log10(hfile[key].value)
+
+    # redshift_org = h_out_gp['redshiftHubble'].value
+
+    # dl_org = z_to_dl(redshift_org)
+    # adjust_org = -2.5*np.log10(1.0+redshift_org) + 5*np.log10(dl_org)
+    # dl_new = z_to_dl(redshift_new)
+    # adjust_new = -2.5*np.log10(1.0+redshift_new) + 5*np.log10(dl_new)
+    # t4 = time.time()
+    # if verbose:
+    #     print("\t done calculating mag adjustment")
+    # adjust_tot = -adjust_org + adjust_new
+    # keys = get_keys(h_out_gp)
+    # for key in keys:
+    #     if "magnitude" in key and "observed" in key:
+    #         print("\t\tadjusting mag: {}".format(key))
+    #         h_out_gp[key][:] = h_out_gp[key].value + adjust_tot
     t5 = time.time()
     if verbose:
         print("\t done rewriting mags",t5-t4)
@@ -227,7 +240,7 @@ def overwrite_columns(input_fname, output_fname,verbose=False):
     #TODO
     #metadata
     #galaxyID
-    h_out_gp['galaxyID'][:]=sdss['id']
+    h_out_gp['galaxyID'][:]=hfile['lightcone_id']
     #hosthalo
     #host halo eigen value
     tf = time.time()
@@ -352,21 +365,41 @@ def plot_side_by_side(lc_data,gal_prop,index,x='Mag_r'):
 
 if __name__ == "__main__":
     param = dtk.Param(sys.argv[1])
-    lc_data_fname = param.get_string('lc_data_fname')
-    gal_prop_fname = param.get_string('gal_prop_fname')
-    output_loc = param.get_string('output_loc')
+    lightcone_fname = param.get_string('lightcone_fname')
+    gltcs_fname = param.get_string('gltcs_fname')
+    gltcs_slope_fname = param.get_string('gltcs_slope_fname')
+    output_fname = param.get_string('output_fname')
+    steps = param.get_int_list('steps')
+    use_slope = param.get_bool('use_slope')
     selection = galmatcher.read_selections()
-    mask = galmatcher.mask_cat(h5py.File(gal_prop_fname, 'r'), selection)
-    verbose = True
-    lc_data = construct_lc_data(lc_data_fname, verbose = verbose)
-    gal_prop,mask = construct_gal_prop(gal_prop_fname, verbose = verbose,mask =mask)
-    index = resample_index(lc_data, gal_prop, verbose = verbose)
-    plot_differences(lc_data,gal_prop,index)
-    plot_differences_2d(lc_data,gal_prop,index)
-    plot_differences_2d(lc_data,gal_prop,index,x='m_star')
-    plot_side_by_side(lc_data,gal_prop,index)
-    dtk.save_figs('figs/{}/{}'.format(sys.argv[1],__file__))
-    plt.show()
-    copy_columns(gal_prop_fname, output_loc, index, verbose = verbose,mask = mask)
-    overwrite_columns(lc_data_fname, output_loc, verbose = verbose)
-    
+    stepz = dtk.StepZ(200,0,500)
+    for step in steps:
+        t0 = time.time()
+        print("\n\n=================================")
+        print(" STEP: ",step)
+        gltcs_step_fname = gltcs_fname.replace("${step}",str(step))
+        gltcs_slope_step_fname = gltcs_slope_fname.replace("${step}",str(step))
+        lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
+        output_step_loc = output_fname.replace("${step}",str(step))
+        mask = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selection)
+        verbose = True
+        lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
+        gal_prop,mask = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask)
+        index = resample_index(lc_data, gal_prop, verbose = verbose)
+        # plot_differences(lc_data,gal_prop,index)
+        # plot_differences_2d(lc_data,gal_prop,index)
+        # plot_differences_2d(lc_data,gal_prop,index,x='m_star')
+        # plot_side_by_side(lc_data,gal_prop,index)
+        # dtk.save_figs('figs/{}/{}'.format(sys.argv[1],__file__))
+        # plt.show()
+        if(use_slope):
+            print(mask)
+            step_redshift = stepz.get_z(step)
+            copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
+                               output_step_loc, index, 
+                               step_redshift, lc_data['redshift'],
+                               verbose=verbose, mask=mask)
+        else:
+            copy_columns(gltcs_step_fname, output_loc, index, verbose = verbose,mask = mask)
+        overwrite_columns(lc_data_fname, output_loc, verbose = verbose)
+        print("\n=====\ndone. {}".format(time.time()-t0))
