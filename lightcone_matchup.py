@@ -24,6 +24,8 @@ def load_lightcone(lc_fname):
     lc['ra'] = np.fromfile(lc_fname.replace("${var}","phi"),dtype='f4')
     lc['dec'] = np.fromfile(lc_fname.replace("${var}","theta"),dtype='f4')
     lc['redshift'] = np.fromfile(lc_fname.replace("${var}","redshift"),dtype='f4')
+    lc['lightcone_rotation'] = np.fromfile(lc_fname.replace("${var}","rotation"),dtype='i4')
+    lc['lightcone_replication'] = np.fromfile(lc_fname.replace("${var}","replication"),dtype='i4')
     print("done {}".format(time.time()-t1))
     return lc
 
