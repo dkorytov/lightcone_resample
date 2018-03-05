@@ -40,6 +40,7 @@ def construct_gal_prop(fname,verbose=False,mask = None,mag_r_cut = False):
     return gal_prop,mask
 
 
+
 def construct_lc_data(fname,verbose = False):
     t1 = time.time()
     lc_data = {}
@@ -107,7 +108,7 @@ def get_keys(hgroup):
     return keys
 
 
-def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, short = False):
+def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, short = False, step = -1):
     h_in = h5py.File(input_fname,'r')
     h_out = h5py.File(output_fname,'w')
     h_in_gp = h_in['galaxyProperties']
@@ -115,10 +116,10 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
     keys = get_keys(h_in_gp)
     for i in range(0,len(keys)):
         key = keys[i]
-        if "dust" in key or "LSST" in key or "SED" in key or "other" in key or "Lines" in key:
+        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
-        print('{}/{}, {} {}'.format(i,len(keys),float(i)/float(len(keys)), key))
+        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
         data = h_in_gp[key].value
         if mask is not None:
             data = data[mask]
@@ -128,11 +129,12 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         #h_out_gp[key].attrs['units'] = a
     return
     
-
+no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity')
+no_slope_ptrn  =('morphology','hostHalo','infall')
 def copy_columns_slope(input_fname, input_slope_fname, 
                        output_fname, index,  
                        input_redshift, lc_redshift, 
-                       verbose = False, mask = None, short = False):
+                       verbose = False, mask = None, short = False, step = -1):
     lc_a = 1.0/(1.0+lc_redshift)
     input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-input_a
@@ -146,21 +148,21 @@ def copy_columns_slope(input_fname, input_slope_fname,
     max_float = np.finfo(np.float32).max #The max float size
     for i in range(0,len(keys)):
         key = keys[i]
-        if "dust" in key or "LSST" in key or "SED" in key or "other" in key or "Lines" in key:
+        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
-        print('{}/{}, {} {}'.format(i,len(keys),float(i)/float(len(keys)), key))
+        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
         data = h_in_gp[key].value
         slope = h_in_slope_gp[key].value
         if mask is not None:
             data = data[mask]
             slope = slope[mask]
-        print(data.dtype)
-        if data.dtype == np.float64 or data.dtype == np.float32:
-            print("\tfloaty type")
+        no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
+        if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
+            print("\tslope")
             new_data = data[index] + slope[index]*del_a
         else:
-            print("\tinty type")
+            print("\tno slope")
             new_data = data[index]
         #TODO Does anything need to stored as double?
         slct_finite = np.isfinite(new_data)
@@ -271,9 +273,6 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
 
 
 def swap(slct, x1, x2):
-    print( slct.size)
-    print( x1.size)
-    print( x2.size)
     xa = x1[slct]
     x1[slct] = x2[slct]
     x2[slct]=xa
@@ -312,6 +311,7 @@ def rotate_host_halo(rot, x,y,z):
     slct5 = rot == 5  
     swap(slct5, x, y)
     swap(slct5, z, x)
+    return
 
 
 def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_loc, verbose=False):
@@ -372,18 +372,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
     rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
     rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
-    hgroup['hostHaloEigenValue1'] = eg_cat_eg1
-    hgroup['hostHaloEigenValue2'] = eg_cat_eg2
-    hgroup['hostHaloEigenValue3'] = eg_cat_eg3
-    hgroup['hostHaloEigenVector1X'] = eg_cat_eg1_x
-    hgroup['hostHaloEigenVector1Y'] = eg_cat_eg1_y
-    hgroup['hostHaloEigenVector1Z'] = eg_cat_eg1_z
-    hgroup['hostHaloEigenVector2X'] = eg_cat_eg2_x
-    hgroup['hostHaloEigenVector2Y'] = eg_cat_eg2_y
-    hgroup['hostHaloEigenVector2Z'] = eg_cat_eg2_z
-    hgroup['hostHaloEigenVector3X'] = eg_cat_eg3_x
-    hgroup['hostHaloEigenVector3Y'] = eg_cat_eg3_y
-    hgroup['hostHaloEigenVector3Z'] = eg_cat_eg3_z
+    hgroup['hostHaloEigenValue1'][:] = eg_cat_eg1
+    hgroup['hostHaloEigenValue2'][:] = eg_cat_eg2
+    hgroup['hostHaloEigenValue3'][:] = eg_cat_eg3
+    hgroup['hostHaloEigenVector1X'][:] = eg_cat_eg1_x
+    hgroup['hostHaloEigenVector1Y'][:] = eg_cat_eg1_y
+    hgroup['hostHaloEigenVector1Z'][:] = eg_cat_eg1_z
+    hgroup['hostHaloEigenVector2X'][:] = eg_cat_eg2_x
+    hgroup['hostHaloEigenVector2Y'][:] = eg_cat_eg2_y
+    hgroup['hostHaloEigenVector2Z'][:] = eg_cat_eg2_z
+    hgroup['hostHaloEigenVector3X'][:] = eg_cat_eg3_x
+    hgroup['hostHaloEigenVector3Y'][:] = eg_cat_eg3_y
+    hgroup['hostHaloEigenVector3Z'][:] = eg_cat_eg3_z
 
 
     eg_cat_htag = dtk.gio_read(halo_shape_red_step_loc,'halo_id')[indx_slct]
@@ -402,28 +402,20 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
     rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
     rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
-    hgroup['hostHaloEigenValueReduced1'] = eg_cat_eg1
-    hgroup['hostHaloEigenValueReduced2'] = eg_cat_eg2
-    hgroup['hostHaloEigenValueReduced3'] = eg_cat_eg3
-    hgroup['hostHaloEigenVectorReduced1X'] = eg_cat_eg1_x
-    hgroup['hostHaloEigenVectorReduced1Y'] = eg_cat_eg1_y
-    hgroup['hostHaloEigenVectorReduced1Z'] = eg_cat_eg1_z
-    hgroup['hostHaloEigenVectorReduced2X'] = eg_cat_eg2_x
-    hgroup['hostHaloEigenVectorReduced2Y'] = eg_cat_eg2_y
-    hgroup['hostHaloEigenVectorReduced2Z'] = eg_cat_eg2_z
-    hgroup['hostHaloEigenVectorReduced3X'] = eg_cat_eg3_x
-    hgroup['hostHaloEigenVectorReduced3Y'] = eg_cat_eg3_y
-    hgroup['hostHaloEigenVectorReduced3Z'] = eg_cat_eg3_z
+    hgroup['hostHaloEigenValueReduced1'][:] = eg_cat_eg1
+    hgroup['hostHaloEigenValueReduced2'][:] = eg_cat_eg2
+    hgroup['hostHaloEigenValueReduced3'][:] = eg_cat_eg3
+    hgroup['hostHaloEigenVectorReduced1X'][:] = eg_cat_eg1_x
+    hgroup['hostHaloEigenVectorReduced1Y'][:] = eg_cat_eg1_y
+    hgroup['hostHaloEigenVectorReduced1Z'][:] = eg_cat_eg1_z
+    hgroup['hostHaloEigenVectorReduced2X'][:] = eg_cat_eg2_x
+    hgroup['hostHaloEigenVectorReduced2Y'][:] = eg_cat_eg2_y
+    hgroup['hostHaloEigenVectorReduced2Z'][:] = eg_cat_eg2_z
+    hgroup['hostHaloEigenVectorReduced3X'][:] = eg_cat_eg3_x
+    hgroup['hostHaloEigenVectorReduced3Y'][:] = eg_cat_eg3_y
+    hgroup['hostHaloEigenVectorReduced3Z'][:] = eg_cat_eg3_z
+    return
 
-    srt = np.argsort(eg_cat_htag)
-    indx = dtk.search_sorted(eg_cat_htag,htag_real[slct_step],sorter=srt)
-    slct_indx = indx != -1
-    slct = slct_step
-    slct[slct_step]=slct_indx
-
-
-
-    
     
 def combine_step_lc_into_one(step_fname_list, out_fname):
     hfile_out = h5py.File(out_fname,'w')
@@ -443,7 +435,7 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
             data_list.append(h_gp[key].value)
             #units = h_gp[key].attrs['units']
         data = np.concatenate(data_list)
-        hfile_gp_out[key]=date
+        hfile_gp_out[key]=data
         #hfile_gp_out[key].attrs['units']=units
     return 
 
@@ -469,13 +461,13 @@ def add_metadata_units(gal_prop_fname, out_fname):
 
 
 def plot_differences(lc_data,gal_prop,index):
-    keys = lc_data.keys()
+    keys = gal_prop.keys()
     dist = {}
     dist_all = None
     for key in keys:
         d = lc_data[key]-gal_prop[key][index]
         dist[key] = d
-        if(dist_all == None):
+        if(dist_all is None):
             dist_all = d*d
         else:
             dist_all += d*d
@@ -499,8 +491,8 @@ def plot_differences(lc_data,gal_prop,index):
     plt.ylabel('count')
 
 
-def plot_differences_2d(lc_data,gal_prop,index,x='Mag_r'):
-    keys = lc_data.keys()
+def plot_differences_2d(lc_data,gal_prop,mask, x='Mag_r'):
+    keys = gal_prop.keys()
     for key in keys:
         if key == x:
             continue
@@ -513,7 +505,7 @@ def plot_differences_2d(lc_data,gal_prop,index,x='Mag_r'):
    
  
 def plot_side_by_side(lc_data,gal_prop,index,x='Mag_r'):
-    keys = lc_data.keys()
+    keys =  gal_prop.keys()
     for key in keys:
         if key == x:
             continue
@@ -554,8 +546,10 @@ if __name__ == "__main__":
     output_fname = param.get_string('output_fname')
     steps = param.get_int_list('steps')
     use_slope = param.get_bool('use_slope')
+    short = param.get_bool('short')
     selection = galmatcher.read_selections()
     stepz = dtk.StepZ(200,0,500)
+    output_step_list = []
     for step in steps:
         t0 = time.time()
         print("\n\n=================================")
@@ -564,6 +558,7 @@ if __name__ == "__main__":
         gltcs_slope_step_fname = gltcs_slope_fname.replace("${step}",str(step))
         lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
         output_step_loc = output_fname.replace("${step}",str(step))
+        output_step_list.append(output_step_loc)
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
@@ -584,11 +579,17 @@ if __name__ == "__main__":
             copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
                                output_step_loc, index, 
                                step_redshift, lc_data['redshift'],
-                               verbose=verbose, mask=mask, short = True)
+                               verbose=verbose, mask=mask, short = short, step = step)
         else:
             print("using no slope", step)
-            copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = True)
+            copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
-        
+        # gal_prop2,mask = construct_gal_prop(output_step_loc, verbose = verbose)
+        # index = np.arange(lc_data['Mag_r'].size, dtype = np.int32)
+        # print("sum mask: ",np.sum(mask),'/',mask.size)
+        # plot_differences(lc_data,gal_prop2, index)
+        # plot_differences_2d(lc_data,gal_prop2, index)
+        # plt.show()
         print("\n=====\ndone. {}".format(time.time()-t0))
+    combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))

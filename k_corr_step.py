@@ -119,14 +119,14 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
         t4 = time.time()
         print("\t done getting satellte indexes {:.2f}".format(t4-t3))
         slct = match_2to1 != -1
-        print(np.sum(nodeIndex1[slct]==nodeIndex2[match_2to1[slct]]), np.sum(slct))
+        #print(np.sum(nodeIndex1[slct]==nodeIndex2[match_2to1[slct]]), np.sum(slct))
     descnIndex  = mtrees.get_descn(nodeIndex1,verbose)
     central_2to1 = dtk.search_sorted(nodeIndex2,descnIndex,sorter=srt)
-    slct = match_2to1 == -1
-    match_2to1[slct] = central_2to1[slct]
-    print("centrals required: ", np.sum(slct))
+    slct_cnt = match_2to1 == -1
+    match_2to1[slct_cnt] = central_2to1[slct_cnt]
+    print("centrals required: ", np.sum(slct_cnt))
     print("central match:", np.sum(central_2to1!=-1))
-    print("used central = -1: ",np.sum(central_2to1[slct]==-1))
+    print("used central = -1: ",np.sum(central_2to1[slct_cnt]==-1))
     if verbose:
         t5 = time.time()
         slct = match_2to1 !=-1
@@ -140,26 +140,41 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
     #step1 to step2
     stepZ = dtk.StepZ(sim_name = "AlphaQ")
     da = stepZ.get_a(step2)-stepZ.get_a(step1)
-    print("da: {}".format(da))
+    print("\tda: {}".format(da))
     #get all keys
     keys = get_keys(hfile1['galaxyProperties'])
-    hgroup_out = h5py.File(output_file,'w').create_group('galaxyProperties')
+    #hgroup_out = h5py.File(output_file,'w').create_group('galaxyProperties')
+    magr1 = hfile1['galaxyProperties']['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
+    magr2 = hfile2['galaxyProperties']['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value[match_2to1]
+    mstar1 = hfile1['galaxyProperties']['totalMassStellar'].value
+    mstar2 = hfile2['galaxyProperties']['totalMassStellar'].value[match_2to1]
+    log_del = np.log(mstar2/mstar1)
+    slct_mstar = (-1 < log_del) & (log_del < +1)
     for key in keys:
         t1 = time.time()
         print("\t {} ".format(key),end='')
         val1 = hfile1['galaxyProperties'][key].value
         val2 = hfile2['galaxyProperties'][key].value[match_2to1]
-        slct = match_2to1 == -1 #for any galaxy we didn't find a match, we just assume
+        # for k in range(0,10):
+        #     print("\n{} => {}\n{} => {}".format(val_1[k],np.log(val_1[k]),val_2[k],np.log(val_2[k])))
+        # val1 = np.log(magr1)-np.log(val_1)
+        # val2 = np.log(magr2)-np.log(val_2)
+        # print("============")
+        # for k in range(0,10):
+        #     print("\n{}-{} => {}\n{}-{} => {}".format(np.log(magr1[k]),np.log(val_1[k]),val1[k],
+        #                                               np.log(magr2[k]),np.log(val_2[k]),val2[k]))
+            
+        slct_nomatch = match_2to1 == -1 #for any galaxy we didn't find a match, we just assume
         # a zero slope. Galacticus galaxies merge, so some loss fraction is expected. I'm
         #seeing ~ 1% unmatched. 
-        val2[slct] = val1[slct]
+        val2[slct_nomatch] = val1[slct_nomatch]
         dval_da = (val2-val1)/da
-        hgroup_out[key] = dval_da
-        # print( val1)
-        # print( val2)
-        # print( da)
-        # print( dval_da)
-        # print("dval/da: min:{:.2f} avg{:.2f} max{:.2f}".format(np.min(dval_da),np.average(dval_da),np.max(dval_da)))
+        #hgroup_out[key] = dval_da
+        print( val1)
+        print( val2)
+        print( da)
+        print( dval_da)
+        print("dval/da: min:{:.2f} avg{:.2f} max{:.2f}".format(np.min(dval_da),np.average(dval_da),np.max(dval_da)))
         print("time:{:.2f}".format( time.time()-t1))
         # plt.figure()
         # slct = val1>0
@@ -172,6 +187,8 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
         # plt.grid()
         # plt.xlabel('val')
         # plt.ylabel('cnt')
+        # plt.legend()
+        
         # plt.figure()
         # dval = val2-val1
         # slct =dval>0
@@ -183,7 +200,96 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
         # plt.grid()
         # plt.xlabel('log10(dval)')
         # plt.ylabel('cnt')
-        # plt.show()
+        # plt.legend(loc='best')
+        
+        log = True
+        bins = np.logspace(1,14,100)
+
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(val1,val2,bins=(bins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('step {}'.format(step1))
+        plt.ylabel('step {}'.format(step2))
+        if log:
+            plt.yscale('log')
+            plt.xscale('log')
+        plt.title(key+"\nAll")
+        plt.grid()
+
+        plt.figure()
+        slct = slct_cnt
+        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('step {}'.format(step1))
+        plt.ylabel('step {}'.format(step2))
+        if log:
+            plt.yscale('log')
+            plt.xscale('log')
+        plt.title(key+"\nCentrals {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        plt.grid()
+
+        plt.figure()
+        slct = ~slct_cnt 
+        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('step {}'.format(step1))
+        plt.ylabel('step {}'.format(step2))
+        if log:
+            plt.yscale('log')
+            plt.xscale('log')
+        plt.title(key+"\nNon central {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        plt.grid()
+
+        plt.figure()
+        slct = ~slct_cnt & ~slct_nomatch
+        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('step {}'.format(step1))
+        plt.ylabel('step {}'.format(step2))
+        if log:
+            plt.yscale('log')
+            plt.xscale('log')
+        plt.title(key+"\nSatellites {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        plt.grid()
+
+        plt.figure()
+        slct = slct_nomatch
+        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('step {}'.format(step1))
+        plt.ylabel('step {}'.format(step2))
+        if log:
+            plt.yscale('log')
+            plt.xscale('log')
+        plt.title(key+"\nNo Descn.fount {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        plt.grid()
+
+        plt.figure()
+        slct = ~slct_mstar
+        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('step {}'.format(step1))
+        plt.ylabel('step {}'.format(step2))
+        if log:
+            plt.yscale('log')
+            plt.xscale('log')
+        plt.title(key+"\nSmall M* change {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        plt.grid()
+
+        plt.figure()
+        slct = slct_mstar
+        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('step {}'.format(step1))
+        plt.ylabel('step {}'.format(step2))
+        if log:
+            plt.yscale('log')
+            plt.xscale('log')
+        plt.title(key+"\nBig M* change {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        plt.grid()
+
+        plt.show()
+    return 
 
 if __name__ == "__main__2":
     print("finding the k-corr for glctcs")
@@ -217,7 +323,7 @@ if __name__ == "__main__2":
 
     for p in ps:
         p.join()
-
+    
 
 
     
