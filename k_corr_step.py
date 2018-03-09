@@ -143,13 +143,13 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
     print("\tda: {}".format(da))
     #get all keys
     keys = get_keys(hfile1['galaxyProperties'])
-    #hgroup_out = h5py.File(output_file,'w').create_group('galaxyProperties')
-    magr1 = hfile1['galaxyProperties']['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
-    magr2 = hfile2['galaxyProperties']['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value[match_2to1]
-    mstar1 = hfile1['galaxyProperties']['totalMassStellar'].value
-    mstar2 = hfile2['galaxyProperties']['totalMassStellar'].value[match_2to1]
-    log_del = np.log(mstar2/mstar1)
-    slct_mstar = (-1 < log_del) & (log_del < +1)
+    hgroup_out = h5py.File(output_file,'w').create_group('galaxyProperties')
+    # magr1 = hfile1['galaxyProperties']['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
+    # magr2 = hfile2['galaxyProperties']['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value[match_2to1]
+    # mstar1 = hfile1['galaxyProperties']['totalMassStellar'].value
+    # mstar2 = hfile2['galaxyProperties']['totalMassStellar'].value[match_2to1]
+    # log_del = np.log(mstar2/mstar1)
+    # slct_mstar = (-1 < log_del) & (log_del < +1)
     for key in keys:
         t1 = time.time()
         print("\t {} ".format(key),end='')
@@ -169,13 +169,13 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
         #seeing ~ 1% unmatched. 
         val2[slct_nomatch] = val1[slct_nomatch]
         dval_da = (val2-val1)/da
-        #hgroup_out[key] = dval_da
-        print( val1)
-        print( val2)
-        print( da)
-        print( dval_da)
-        print("dval/da: min:{:.2f} avg{:.2f} max{:.2f}".format(np.min(dval_da),np.average(dval_da),np.max(dval_da)))
-        print("time:{:.2f}".format( time.time()-t1))
+        hgroup_out[key] = dval_da
+        # print( val1)
+        # print( val2)
+        # print( da)
+        # print( dval_da)
+        # print("dval/da: min:{:.2f} avg{:.2f} max{:.2f}".format(np.min(dval_da),np.average(dval_da),np.max(dval_da)))
+        # print("time:{:.2f}".format( time.time()-t1))
         # plt.figure()
         # slct = val1>0
         # h,xbins = np.histogram(np.log10(val1[slct]),bins = 100)
@@ -202,93 +202,93 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
         # plt.ylabel('cnt')
         # plt.legend(loc='best')
         
-        log = True
-        bins = np.logspace(1,14,100)
+        # log = True
+        # bins = np.logspace(1,14,100)
 
-        plt.figure()
-        h,xbins,ybins = np.histogram2d(val1,val2,bins=(bins,bins))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        plt.xlabel('step {}'.format(step1))
-        plt.ylabel('step {}'.format(step2))
-        if log:
-            plt.yscale('log')
-            plt.xscale('log')
-        plt.title(key+"\nAll")
-        plt.grid()
+        # plt.figure()
+        # h,xbins,ybins = np.histogram2d(val1,val2,bins=(bins,bins))
+        # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        # plt.xlabel('step {}'.format(step1))
+        # plt.ylabel('step {}'.format(step2))
+        # if log:
+        #     plt.yscale('log')
+        #     plt.xscale('log')
+        # plt.title(key+"\nAll")
+        # plt.grid()
 
-        plt.figure()
-        slct = slct_cnt
-        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        plt.xlabel('step {}'.format(step1))
-        plt.ylabel('step {}'.format(step2))
-        if log:
-            plt.yscale('log')
-            plt.xscale('log')
-        plt.title(key+"\nCentrals {}".format(np.float(np.sum(slct))/np.float(slct.size)))
-        plt.grid()
+        # plt.figure()
+        # slct = slct_cnt
+        # h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        # plt.xlabel('step {}'.format(step1))
+        # plt.ylabel('step {}'.format(step2))
+        # if log:
+        #     plt.yscale('log')
+        #     plt.xscale('log')
+        # plt.title(key+"\nCentrals {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        # plt.grid()
 
-        plt.figure()
-        slct = ~slct_cnt 
-        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        plt.xlabel('step {}'.format(step1))
-        plt.ylabel('step {}'.format(step2))
-        if log:
-            plt.yscale('log')
-            plt.xscale('log')
-        plt.title(key+"\nNon central {}".format(np.float(np.sum(slct))/np.float(slct.size)))
-        plt.grid()
+        # plt.figure()
+        # slct = ~slct_cnt 
+        # h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        # plt.xlabel('step {}'.format(step1))
+        # plt.ylabel('step {}'.format(step2))
+        # if log:
+        #     plt.yscale('log')
+        #     plt.xscale('log')
+        # plt.title(key+"\nNon central {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        # plt.grid()
 
-        plt.figure()
-        slct = ~slct_cnt & ~slct_nomatch
-        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        plt.xlabel('step {}'.format(step1))
-        plt.ylabel('step {}'.format(step2))
-        if log:
-            plt.yscale('log')
-            plt.xscale('log')
-        plt.title(key+"\nSatellites {}".format(np.float(np.sum(slct))/np.float(slct.size)))
-        plt.grid()
+        # plt.figure()
+        # slct = ~slct_cnt & ~slct_nomatch
+        # h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        # plt.xlabel('step {}'.format(step1))
+        # plt.ylabel('step {}'.format(step2))
+        # if log:
+        #     plt.yscale('log')
+        #     plt.xscale('log')
+        # plt.title(key+"\nSatellites {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        # plt.grid()
 
-        plt.figure()
-        slct = slct_nomatch
-        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        plt.xlabel('step {}'.format(step1))
-        plt.ylabel('step {}'.format(step2))
-        if log:
-            plt.yscale('log')
-            plt.xscale('log')
-        plt.title(key+"\nNo Descn.fount {}".format(np.float(np.sum(slct))/np.float(slct.size)))
-        plt.grid()
+        # plt.figure()
+        # slct = slct_nomatch
+        # h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        # plt.xlabel('step {}'.format(step1))
+        # plt.ylabel('step {}'.format(step2))
+        # if log:
+        #     plt.yscale('log')
+        #     plt.xscale('log')
+        # plt.title(key+"\nNo Descn.fount {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        # plt.grid()
 
-        plt.figure()
-        slct = ~slct_mstar
-        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        plt.xlabel('step {}'.format(step1))
-        plt.ylabel('step {}'.format(step2))
-        if log:
-            plt.yscale('log')
-            plt.xscale('log')
-        plt.title(key+"\nSmall M* change {}".format(np.float(np.sum(slct))/np.float(slct.size)))
-        plt.grid()
+        # plt.figure()
+        # slct = ~slct_mstar
+        # h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        # plt.xlabel('step {}'.format(step1))
+        # plt.ylabel('step {}'.format(step2))
+        # if log:
+        #     plt.yscale('log')
+        #     plt.xscale('log')
+        # plt.title(key+"\nSmall M* change {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        # plt.grid()
 
-        plt.figure()
-        slct = slct_mstar
-        h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        plt.xlabel('step {}'.format(step1))
-        plt.ylabel('step {}'.format(step2))
-        if log:
-            plt.yscale('log')
-            plt.xscale('log')
-        plt.title(key+"\nBig M* change {}".format(np.float(np.sum(slct))/np.float(slct.size)))
-        plt.grid()
+        # plt.figure()
+        # slct = slct_mstar
+        # h,xbins,ybins = np.histogram2d(val1[slct],val2[slct],bins=(bins,bins))
+        # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        # plt.xlabel('step {}'.format(step1))
+        # plt.ylabel('step {}'.format(step2))
+        # if log:
+        #     plt.yscale('log')
+        #     plt.xscale('log')
+        # plt.title(key+"\nBig M* change {}".format(np.float(np.sum(slct))/np.float(slct.size)))
+        # plt.grid()
 
-        plt.show()
+        # plt.show()
     return 
 
 if __name__ == "__main__2":

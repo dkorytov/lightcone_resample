@@ -40,6 +40,38 @@ def construct_gal_prop(fname,verbose=False,mask = None,mag_r_cut = False):
     return gal_prop,mask
 
 
+def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None):
+    t1 = time.time()
+    del_a = target_a - snap_a
+    gal_prop = {}
+    gal_prop_slope = {}
+    hfile = h5py.File(fname,'r')
+    hfile_slp = h5py.File(slope_fname,'r')
+    hgp = hfile['galaxyProperties']
+    hgp_slp = hfile_slp['galaxyProperties']
+    m_star =hgp['totalMassStellar'].value
+    mag_g = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
+    mag_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
+    mag_i = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
+    if mask is None:
+        mask = np.ones(mag_r.size,dtype=bool)
+    if mag_r_cut:
+        #TODO check
+        mask = (mag_r < -10) & mask
+    if index is None:
+        index = np.arange(0,np.sum(mask)-1,dtype='i4')
+    m_star_slp = hgp_slp['totalMassStellar'].value
+    mag_g_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
+    mag_r_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
+    mag_i_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
+    gal_prop['m_star'] = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
+    gal_prop['Mag_r'] = -2.5*np.log10(mag_g[mask][index] + mag_g_slp[mask][index]*del_a)
+    gal_prop['clr_gr'] = -2.5*( np.log10(mag_g[mask][index] + mag_g_slp[mask][index]*del_a) - np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) )
+    gal_prop['clr_ri'] = -2.5*( np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) - np.log10(mag_i[mask][index] + mag_i_slp[mask][index]*del_a) )
+    if verbose:
+        print('done loading slope gal prop. {}'.format(time.time()-t1))
+    return gal_prop,mask
+
 
 def construct_lc_data(fname,verbose = False):
     t1 = time.time()
@@ -58,6 +90,13 @@ def construct_lc_data(fname,verbose = False):
     if verbose:
         print('done loading lc data. {}'.format(time.time()-t1))
     return lc_data
+
+
+def dic_select(dic, slct):
+    new_dic = {}
+    for key in dic.keys():
+        new_dic[key] = dic[key][slct]
+    return new_dic
 
 
 def select_by_index(data,index):
@@ -129,14 +168,16 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         #h_out_gp[key].attrs['units'] = a
     return
     
+
 no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity')
 no_slope_ptrn  =('morphology','hostHalo','infall')
+
 def copy_columns_slope(input_fname, input_slope_fname, 
                        output_fname, index,  
-                       input_redshift, lc_redshift, 
+                       input_a, lc_a, 
                        verbose = False, mask = None, short = False, step = -1):
-    lc_a = 1.0/(1.0+lc_redshift)
-    input_a = 1.0/(1.0 + input_redshift)
+    # lc_a = 1.0/(1.0+lc_redshift)
+    # input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-input_a
     h_in = h5py.File(input_fname,'r')
     h_in_slope = h5py.File(input_slope_fname,'r')
@@ -151,7 +192,8 @@ def copy_columns_slope(input_fname, input_slope_fname,
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
-        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
+        if verbose:
+            print('{}/{},{} {} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key,output_fname))
         data = h_in_gp[key].value
         slope = h_in_slope_gp[key].value
         if mask is not None:
@@ -159,10 +201,10 @@ def copy_columns_slope(input_fname, input_slope_fname,
             slope = slope[mask]
         no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
         if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
-            print("\tslope")
+            #print("\tslope")
             new_data = data[index] + slope[index]*del_a
         else:
-            print("\tno slope")
+            #print("\tno slope")
             new_data = data[index]
         #TODO Does anything need to stored as double?
         slct_finite = np.isfinite(new_data)
@@ -184,8 +226,6 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
     h_in = h5py.File(input_fname,'r')
     #redshift = np.ones(sdss['x'].quantity.size)*0.1
     h_out = h5py.File(output_fname, 'a')
-    print(output_fname)
-    print(h_out.keys())
     h_out_gp = h_out['galaxyProperties']
     t2 = time.time()
     if verbose:
@@ -460,7 +500,7 @@ def add_metadata_units(gal_prop_fname, out_fname):
     hfile_out['/metaData/catalogCreationDate']=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
 
-def plot_differences(lc_data,gal_prop,index):
+def plot_differences(lc_data, gal_prop, index):
     keys = gal_prop.keys()
     dist = {}
     dist_all = None
@@ -483,28 +523,33 @@ def plot_differences(lc_data,gal_prop,index):
     plt.ylabel('count')
     plt.figure()
     h,xbins = np.histogram(dist_all,bins=100)
-    plt.plot(dtk.bins_avg(xbins),h,label='all')
+    plt.plot(dtk.bins_avg(xbins),h,label='all',lw=2.0)
+    for key in keys:
+        h,xbins = np.histogram(dist[key],bins=xbins)
+        plt.plot(dtk.bins_avg(xbins),h,label=key)
     plt.yscale('log')
     plt.grid()
     plt.legend(loc='best')
     plt.xlabel('distance in match')
     plt.ylabel('count')
+    return
 
 
-def plot_differences_2d(lc_data,gal_prop,mask, x='Mag_r'):
+def plot_differences_2d(lc_data, gal_prop,index, x='Mag_r'):
     keys = gal_prop.keys()
     for key in keys:
-        if key == x:
-            continue
+        # if key == x:
+        #     continue
         plt.figure()
         h,xbins,ybins = np.histogram2d(lc_data[x],lc_data[key]-gal_prop[key][index],bins=(100,100))
         plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm = clr.LogNorm())
         plt.ylabel("diff {} (orginal-new)".format(key))
         plt.xlabel(x)
         plt.grid()
-   
+    return
+
  
-def plot_side_by_side(lc_data,gal_prop,index,x='Mag_r'):
+def plot_side_by_side(lc_data, gal_prop, index, x='Mag_r'):
     keys =  gal_prop.keys()
     for key in keys:
         if key == x:
@@ -533,6 +578,66 @@ def plot_side_by_side(lc_data,gal_prop,index,x='Mag_r'):
     return
 
 
+def plot_mag_r(lc_data,gal_prop,index):
+    plt.figure()
+    max_r = np.max((np.max(lc_data['Mag_r']),np.max(gal_prop['Mag_r'][index])))
+    min_r = np.min((np.min(lc_data['Mag_r']),np.min(gal_prop['Mag_r'][index])))
+    bins = np.linspace(min_r,max_r,100)
+    h_lc,_ = np.histogram(lc_data['Mag_r'],bins=bins)
+    h_mg,_ = np.histogram(gal_prop['Mag_r'][index],bins=bins)
+    plt.plot(dtk.bins_avg(bins),h_lc,label='UMachine-SDSS')
+    plt.plot(dtk.bins_avg(bins),h_mg,label='Matched Glctcs')
+    plt.grid()
+    plt.xlabel("Mr")
+    plt.ylabel('Count')
+    return
+
+
+def plot_clr_mag(lc_data,gal_prop,index,mag_bins,data_key, data_name):
+    fig,ax = plt.subplots(1,len(mag_bins),figsize=(15,5))
+    # max_gr = np.max((np.max(lc_data[data_key]),np.max(gal_prop[data_key])))
+    # min_gr = np.min((np.min(lc_data[data_key]),np.min(gal_prop[data_key])))
+    bins = np.linspace(0.0, 1.1, 50)
+    for i in range(0, len(mag_bins)):
+        if i == 0:
+            slct_lc = lc_data['Mag_r']<mag_bins[i]
+            slct_mg = gal_prop['Mag_r'][index]<mag_bins[i]
+            ax[i].set_title('Mr < {}'.format(mag_bins[i]))
+        else:
+            slct_lc = (mag_bins[i-1] < lc_data['Mag_r']) & ( lc_data['Mag_r'] < mag_bins[i])
+            slct_mg = (mag_bins[i-1] < gal_prop['Mag_r'][index]) & ( gal_prop['Mag_r'][index] < mag_bins[i])
+            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i], mag_bins[i-1]))
+        h_lc, _ = np.histogram(lc_data[data_key][slct_lc],bins=bins)
+        h_mg, _ = np.histogram(gal_prop[data_key][index][slct_mg],bins=bins)
+        ax[i].plot(dtk.bins_avg(bins),h_lc,label = 'UMachine-SDSS')
+        ax[i].plot(dtk.bins_avg(bins),h_mg, label = 'Matched Glctcs')
+        if i ==0:
+            ax[i].legend(loc='best', framealpha=0.3)
+        ax[i].set_xlabel(data_name)
+        ax[i].set_ylabel('Count')
+        ax[i].grid()
+        
+
+def plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins):
+    fig,ax = plt.subplots(1,len(mag_bins),figsize=(15,5))
+    for i in range(0, len(mag_bins)):
+        if i == 0:
+            slct_lc = lc_data['Mag_r']<mag_bins[i]
+            slct_mg = gal_prop['Mag_r'][index]<mag_bins[i]
+            ax[i].set_title('Mr < {}'.format(mag_bins[i]))
+        else:
+            slct_lc = (mag_bins[i-1] < lc_data['Mag_r']) & ( lc_data['Mag_r'] < mag_bins[i])
+            slct_mg = (mag_bins[i-1] < gal_prop['Mag_r'][index]) & ( gal_prop['Mag_r'][index] < mag_bins[i])
+            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i], mag_bins[i-1]))
+        # print('{} < Mr < {}'.format(mag_bins[i], mag_bins[i-1]))
+        # print(np.average(lc_data['Mag_r'][slct_lc]))
+        ax[i].plot(lc_data['clr_gr'][slct_lc], lc_data['clr_ri'][slct_lc],'.',alpha=0.3,label='UMachine-SDSS')
+        ax[i].plot(gal_prop['clr_gr'][index][slct_mg], gal_prop['clr_ri'][index][slct_mg],'.',alpha=0.3,label='Matched Glctcs')
+        if i ==0:
+            ax[i].legend(loc='best', framealpha=0.3)
+        ax[i].set_xlabel('g-r color')
+        ax[i].set_ylabel('r-i color')
+        ax[i].grid()
 
 
 if __name__ == "__main__":
@@ -547,14 +652,19 @@ if __name__ == "__main__":
     steps = param.get_int_list('steps')
     use_slope = param.get_bool('use_slope')
     short = param.get_bool('short')
+    substeps = param.get_int('substeps')
+    plot = param.get_bool('plot')
     selection = galmatcher.read_selections()
     stepz = dtk.StepZ(200,0,500)
     output_step_list = []
-    for step in steps:
+    step_size = steps.size
+    for i in range(0,step_size-1):
         t0 = time.time()
+        step = steps[i+1]
+        step2 = steps[i]
         print("\n\n=================================")
         print(" STEP: ",step)
-        gltcs_step_fname = gltcs_fname.replace("${step}",str(step))
+        gltcs_step_fname = gltcs_fname.replace("${step}",str(step)) 
         gltcs_slope_step_fname = gltcs_slope_fname.replace("${step}",str(step))
         lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
         output_step_loc = output_fname.replace("${step}",str(step))
@@ -565,31 +675,64 @@ if __name__ == "__main__":
         mask = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selection)
         verbose = True
         lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
-        gal_prop,mask = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask)
-        index = resample_index(lc_data, gal_prop, verbose = verbose)
-        # plot_differences(lc_data,gal_prop,index)
-        # plot_differences_2d(lc_data,gal_prop,index)
-        # plot_differences_2d(lc_data,gal_prop,index,x='m_star')
-        # plot_side_by_side(lc_data,gal_prop,index)
-        # dtk.save_figs('figs/{}/{}'.format(sys.argv[1],__file__))
-        # plt.show()
         if(use_slope):
             print("using slope", step)
-            step_redshift = stepz.get_z(step)
+            step_a = stepz.get_a(step)
+            step2_a = stepz.get_a(step2)
+            abins = np.linspace(step_a, step2_a,substeps+1)
+            abins_avg = dtk.bins_avg(abins)
+            index = -1*np.ones(lc_data['redshift'].size,dtype='i4')
+            for k in range(0,abins_avg.size):
+                print("\t{}/{} substeps".format(k,abins_avg.size))
+                lc_a = 1.0/(1.0 +lc_data['redshift'])
+                h,xbins = np.histogram(lc_a,bins=100)
+                slct_lc_abins1 = (abins[k]<lc_a) 
+                slct_lc_abins2 = (lc_a<abins[k+1])
+                slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
+                gal_prop_a, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
+                                                             step_a, abins_avg[k],
+                                                             verbose = verbose,
+                                                             mask=mask)
+                lc_data_a = dic_select(lc_data, slct_lc_abin)
+                index_abin = resample_index(lc_data_a, gal_prop_a, verbose = verbose)
+                gal_prop_aa, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
+                                                                step_a, lc_a[slct_lc_abin],
+                                                                verbose = verbose,
+                                                                mask=mask,
+                                                                index=index_abin)
+                index[slct_lc_abin] = index_abin
+                if plot:
+                    plot_differences(lc_data_a, gal_prop_a, index_abin)
+                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
+                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin, x='m_star')
+                    plot_side_by_side(lc_data_a, gal_prop_a, index_abin)
+                    mag_bins = (-21,-20,-19)
+                    plot_mag_r(lc_data, gal_prop_a, index_abin)
+                    plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color')
+                    plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
+                    plot_ri_gr_mag(lc_data, gal_prop_a, index_abin, mag_bins)
+                    plt.show()
+            slct_neg = index == -1
+            print("not assigned: {}/{}: {:.2f}".format( np.sum(slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
             copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
                                output_step_loc, index, 
-                               step_redshift, lc_data['redshift'],
+                               step_a, lc_data['redshift'],
                                verbose=verbose, mask=mask, short = short, step = step)
+            
         else:
             print("using no slope", step)
+            gal_prop,mask = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask)
+            index = resample_index(lc_data, gal_prop, verbose = verbose)
+            if plot:
+                plot_differences(lc_data, gal_prop, index)
+                plot_differences_2d(lc_data, gal_prop, index)
+                plot_differences_2d(lc_data, gal_prop, index, x='m_star')
+                plot_side_by_side(lc_data, gal_prop, index)
+                plt.show()
             copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
+   
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
-        # gal_prop2,mask = construct_gal_prop(output_step_loc, verbose = verbose)
-        # index = np.arange(lc_data['Mag_r'].size, dtype = np.int32)
-        # print("sum mask: ",np.sum(mask),'/',mask.size)
-        # plot_differences(lc_data,gal_prop2, index)
-        # plot_differences_2d(lc_data,gal_prop2, index)
-        # plt.show()
         print("\n=====\ndone. {}".format(time.time()-t0))
-    combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))
+    
+    # combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))
