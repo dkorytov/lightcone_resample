@@ -17,7 +17,7 @@ from astropy.cosmology import WMAP7 as cosmo
 from scipy.interpolate import interp1d 
 import galmatcher
 
-def construct_gal_prop(fname,verbose=False,mask = None,mag_r_cut = False):
+def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     t1 = time.time()
     gal_prop = {}
     hfile = h5py.File(fname,'r')
@@ -38,6 +38,52 @@ def construct_gal_prop(fname,verbose=False,mask = None,mag_r_cut = False):
     if verbose:
         print('done loading gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
+
+def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = None, mag_r_cut = False):
+    t1 = time.time()
+    gal_prop = {}
+    hfile = h5py.File(fname,'r')
+    hgp = hfile['galaxyProperties']
+    m_star = np.log10(hgp['totalMassStellar'].value)
+    mag_gd = hgp['SDSS_filters/magnitude:SDSS_g:rest:dustAtlas'].value
+    mag_rd = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
+    mag_id = hgp['SDSS_filters/magnitude:SDSS_i:rest:dustAtlas'].value
+    mag_gnd = hgp['SDSS_filters/magnitude:SDSS_g:rest'].value
+    mag_rnd = hgp['SDSS_filters/magnitude:SDSS_r:rest'].value
+    mag_ind = hgp['SDSS_filters/magnitude:SDSS_i:rest'].value
+    mag_dgd = mag_gd - mag_gnd
+    mag_drd = mag_rd - mag_rnd
+    mag_did = mag_id - mag_ind
+    mag_g = mag_gd + (dust_factor-1.0)*mag_dgd
+    mag_r = mag_rd + (dust_factor-1.0)*mag_drd
+    mag_i = mag_id + (dust_factor-1.0)*mag_did
+    slct_fnt = np.isfinite(mag_g)
+    print("dust factor: ", dust_factor)
+    print(np.sum(mag_g[slct_fnt]-mag_gd[slct_fnt]))
+    print("num diff: ", np.sum( (mag_g[slct_fnt]-mag_gd[slct_fnt]) == 0), np.sum(slct_fnt))
+    if mask is None:
+        mask = np.ones(mag_r.size,dtype=bool)
+    if mag_r_cut:
+        #TODO check
+        mask = (mag_r < -10) & mask
+    gal_prop['m_star'] = m_star[mask]
+    gal_prop['Mag_r']  = mag_r[mask]
+    gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
+    gal_prop['clr_ri'] = mag_r[mask]-mag_i[mask]
+    if verbose:
+        print('done loading gal prop. {}'.format(time.time()-t1))
+    return gal_prop,mask
+
+def cat_dics(dics, keys = None):
+    new_dic = {}
+    if keys is None:
+        keys = dics[0].keys()
+    for key in keys:
+        new_dic[key] = []
+        for dic in dics:
+            new_dic[key].append(dic[key])
+        new_dic[key] = np.concatenate(new_dic[key])
+    return new_dic
 
 
 def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None):
@@ -558,21 +604,21 @@ def plot_side_by_side(lc_data, gal_prop, index, x='Mag_r'):
         h,xbins,ybins = np.histogram2d(lc_data[x],lc_data[key],bins=(100,100))
         axs[0].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
         axs[0].grid()
-        axs[0].set_title('Original Catalog')
+        axs[0].set_title('UMachine + SDSS')
         axs[0].set_xlabel(x)
         axs[0].set_ylabel(key)
 
         h,xbins,ybins = np.histogram2d(gal_prop[x][index],gal_prop[key][index],bins=(xbins,ybins))
         axs[1].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
         axs[1].grid()
-        axs[1].set_title('Original Sampled from Target')
+        axs[1].set_title('Matched Galacticus')
         axs[1].set_xlabel(x)
         axs[1].set_ylabel(key)
 
         h,xbins,ybins = np.histogram2d(gal_prop[x],gal_prop[key],bins=(xbins,ybins))
         axs[2].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
         axs[2].grid()
-        axs[2].set_title('Target Catalog ')
+        axs[2].set_title('Galacticus ')
         axs[2].set_xlabel(x)
         axs[2].set_ylabel(key)
     return
@@ -585,11 +631,12 @@ def plot_mag_r(lc_data,gal_prop,index):
     bins = np.linspace(min_r,max_r,100)
     h_lc,_ = np.histogram(lc_data['Mag_r'],bins=bins)
     h_mg,_ = np.histogram(gal_prop['Mag_r'][index],bins=bins)
-    plt.plot(dtk.bins_avg(bins),h_lc,label='UMachine-SDSS')
-    plt.plot(dtk.bins_avg(bins),h_mg,label='Matched Glctcs')
+    plt.plot(dtk.bins_avg(bins),h_lc, 'b', label='UMachine-SDSS')
+    plt.plot(dtk.bins_avg(bins),h_mg, 'r', label='Matched Glctcs')
     plt.grid()
     plt.xlabel("Mr")
     plt.ylabel('Count')
+    plt.legend(loc='best')
     return
 
 
@@ -606,11 +653,11 @@ def plot_clr_mag(lc_data,gal_prop,index,mag_bins,data_key, data_name):
         else:
             slct_lc = (mag_bins[i-1] < lc_data['Mag_r']) & ( lc_data['Mag_r'] < mag_bins[i])
             slct_mg = (mag_bins[i-1] < gal_prop['Mag_r'][index]) & ( gal_prop['Mag_r'][index] < mag_bins[i])
-            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i], mag_bins[i-1]))
+            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i-1], mag_bins[i]))
         h_lc, _ = np.histogram(lc_data[data_key][slct_lc],bins=bins)
         h_mg, _ = np.histogram(gal_prop[data_key][index][slct_mg],bins=bins)
-        ax[i].plot(dtk.bins_avg(bins),h_lc,label = 'UMachine-SDSS')
-        ax[i].plot(dtk.bins_avg(bins),h_mg, label = 'Matched Glctcs')
+        ax[i].plot(dtk.bins_avg(bins),h_lc,'b', label = 'UMachine-SDSS')
+        ax[i].plot(dtk.bins_avg(bins),h_mg,'r', label = 'Matched Glctcs')
         if i ==0:
             ax[i].legend(loc='best', framealpha=0.3)
         ax[i].set_xlabel(data_name)
@@ -628,11 +675,11 @@ def plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins):
         else:
             slct_lc = (mag_bins[i-1] < lc_data['Mag_r']) & ( lc_data['Mag_r'] < mag_bins[i])
             slct_mg = (mag_bins[i-1] < gal_prop['Mag_r'][index]) & ( gal_prop['Mag_r'][index] < mag_bins[i])
-            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i], mag_bins[i-1]))
+            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i-1], mag_bins[i]))
         # print('{} < Mr < {}'.format(mag_bins[i], mag_bins[i-1]))
         # print(np.average(lc_data['Mag_r'][slct_lc]))
-        ax[i].plot(lc_data['clr_gr'][slct_lc], lc_data['clr_ri'][slct_lc],'.',alpha=0.3,label='UMachine-SDSS')
-        ax[i].plot(gal_prop['clr_gr'][index][slct_mg], gal_prop['clr_ri'][index][slct_mg],'.',alpha=0.3,label='Matched Glctcs')
+        ax[i].plot(lc_data['clr_gr'][slct_lc], lc_data['clr_ri'][slct_lc],'.b',alpha=0.5,label='UMachine-SDSS',ms=4)
+        ax[i].plot(gal_prop['clr_gr'][index][slct_mg], gal_prop['clr_ri'][index][slct_mg],'.r',alpha=0.5,label='Matched Glctcs', ms=4)
         if i ==0:
             ax[i].legend(loc='best', framealpha=0.3)
         ax[i].set_xlabel('g-r color')
@@ -654,6 +701,8 @@ if __name__ == "__main__":
     short = param.get_bool('short')
     substeps = param.get_int('substeps')
     plot = param.get_bool('plot')
+    use_dust_factor = param.get_bool('use_dust_factor')
+    dust_factors = param.get_float_list('dust_factors')
     selection = galmatcher.read_selections()
     stepz = dtk.StepZ(200,0,500)
     output_step_list = []
@@ -703,8 +752,8 @@ if __name__ == "__main__":
                 index[slct_lc_abin] = index_abin
                 if plot:
                     plot_differences(lc_data_a, gal_prop_a, index_abin)
-                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
-                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin, x='m_star')
+                    #plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
+                    #plot_differences_2d(lc_data_a, gal_prop_a, index_abin, x='m_star')
                     plot_side_by_side(lc_data_a, gal_prop_a, index_abin)
                     mag_bins = (-21,-20,-19)
                     plot_mag_r(lc_data, gal_prop_a, index_abin)
@@ -721,14 +770,35 @@ if __name__ == "__main__":
             
         else:
             print("using no slope", step)
-            gal_prop,mask = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask)
+            gal_prop_simple,mask_simple = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask)
+            if use_dust_factor:
+                masks = []
+                gal_props = []
+                for dust_factor in dust_factors:
+                    gp, m = construct_gal_prop_dust_factor(gltcs_step_fname, dust_factor, verbose = verbose,mask =mask)
+                    gal_props.append(gp)
+                    masks.append(m)
+                masks.append(mask_simple)
+                gal_props.append(gal_prop_simple)
+                gal_prop = cat_dics(gal_props)
+                mask_use = np.concatenate(masks)
+            else:
+                gal_prop = gal_prop_simple
+                mask = mask_simple
             index = resample_index(lc_data, gal_prop, verbose = verbose)
+
             if plot:
                 plot_differences(lc_data, gal_prop, index)
-                plot_differences_2d(lc_data, gal_prop, index)
-                plot_differences_2d(lc_data, gal_prop, index, x='m_star')
+                #plot_differences_2d(lc_data, gal_prop, index)
+                #plot_differences_2d(lc_data, gal_prop, index, x='m_star')
                 plot_side_by_side(lc_data, gal_prop, index)
+                mag_bins = (-21,-20,-19)
+                plot_mag_r(lc_data, gal_prop, index)
+                plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
+                plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
+                plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins)
                 plt.show()
+            exit()
             copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
    
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
