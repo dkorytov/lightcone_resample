@@ -57,10 +57,17 @@ def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = Non
     mag_g = mag_gd + (dust_factor-1.0)*mag_dgd
     mag_r = mag_rd + (dust_factor-1.0)*mag_drd
     mag_i = mag_id + (dust_factor-1.0)*mag_did
-    slct_fnt = np.isfinite(mag_g)
     print("dust factor: ", dust_factor)
+    slct_fnt = np.isfinite(mag_g)
     print(np.sum(mag_g[slct_fnt]-mag_gd[slct_fnt]))
     print("num diff: ", np.sum( (mag_g[slct_fnt]-mag_gd[slct_fnt]) == 0), np.sum(slct_fnt))
+    slct_fnt = np.isfinite(mag_r)
+    print(np.sum(mag_r[slct_fnt]-mag_rd[slct_fnt]))
+    print("num diff: ", np.sum( (mag_r[slct_fnt]-mag_rd[slct_fnt]) == 0), np.sum(slct_fnt))
+    slct_fnt = np.isfinite(mag_i)
+    print(np.sum(mag_i[slct_fnt]-mag_id[slct_fnt]))
+    print("num diff: ", np.sum( (mag_i[slct_fnt]-mag_id[slct_fnt]) == 0), np.sum(slct_fnt))
+
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
@@ -152,7 +159,7 @@ def select_by_index(data,index):
     return new_data
 
 
-def resample_index(lc_data, gal_prop, nnk = 10, verbose = False):
+def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = False):
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling")
@@ -160,11 +167,18 @@ def resample_index(lc_data, gal_prop, nnk = 10, verbose = False):
     mag_r  = lc_data['Mag_r']
     clr_gr = lc_data['clr_gr']
     clr_ri = lc_data['clr_ri']
-    lc_mat = np.stack((m_star,mag_r,clr_gr,clr_ri),axis=1)
-    gal_mat = np.stack((gal_prop['m_star'],
-                        gal_prop['Mag_r'],
-                        gal_prop['clr_gr'],
-                        gal_prop['clr_ri']),axis=1)
+    if not ignore_mstar:
+        lc_mat = np.stack((m_star,mag_r,clr_gr,clr_ri),axis=1)
+        gal_mat = np.stack((gal_prop['m_star'],
+                            gal_prop['Mag_r'],
+                            gal_prop['clr_gr'],
+                            gal_prop['clr_ri']),axis=1)
+    else:
+        lc_mat = np.stack((mag_r,clr_gr,clr_ri),axis=1)
+        gal_mat = np.stack((gal_prop['Mag_r'],
+                            gal_prop['clr_gr'],
+                            gal_prop['clr_ri']),axis=1)
+
     if verbose:
         t2 = time.time()
         print('\tdone formating data. {}'.format(t2-t1))
@@ -213,9 +227,47 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         #a = h_in_gp[key].attrs['units'].value
         #h_out_gp[key].attrs['units'] = a
     return
+
+copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','placementType','isCentral','hostIndex')
+copy_avoids_ptrn = ('hostHalo','magnitude')
+def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose = False,mask = None, short = False, step = -1):
+    h_in = h5py.File(input_fname,'r')
+    h_out = h5py.File(output_fname,'w')
+    h_in_gp = h_in['galaxyProperties']
+    h_out_gp = h_out.create_group('galaxyProperties')
+    keys = get_keys(h_in_gp)
+    for i in range(0,len(keys)):
+        key = keys[i]
+        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
+            if short:
+                continue
+        if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
+            print("{} isn't copied".format(key))
+            continue
+
+        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
+        if ":dustAtlas" in key:
+            nd_key = key.replace(":dustAtlas","")
+            dust_data =  np.log(h_in_gp[key].value[mask][index])
+            no_dust_data = np.log(h_in_gp[key].value[mask][index])
+            delta_dust = no_dust_data - dust_data
+            data = 10**(dust_data + (dust_factor -1 ) * delta_dust)
+        else:
+            data = h_in_gp[key].value
+            if mask is not None:
+                data = data[mask]
+            data = data[index]
+        if "dustMass" in key:
+            data = data*dust_factor
+        h_out_gp[key]=data
+
+        #TODO add units
+        #a = h_in_gp[key].attrs['units'].value
+        #h_out_gp[key].attrs['units'] = a
+    return
     
 
-no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity')
+no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
 def copy_columns_slope(input_fname, input_slope_fname, 
@@ -284,12 +336,12 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
     vy = h_in['vy'].value
     vz = h_in['vz'].value
     redshift  =h_in['redshift'].value
-    h_out_gp['x'][:]=x
-    h_out_gp['y'][:]=y
-    h_out_gp['z'][:]=z
-    h_out_gp['vx'][:]=vx
-    h_out_gp['vy'][:]=vy
-    h_out_gp['vz'][:]=vz
+    h_out_gp['x']=x
+    h_out_gp['y']=y
+    h_out_gp['z']=z
+    h_out_gp['vx']=vx
+    h_out_gp['vy']=vy
+    h_out_gp['vz']=vz
     h_out_gp['lightcone_rotation'] = h_in['lightcone_rotation'].value
     h_out_gp['lightcone_replication'] = h_in['lightcone_replication'].value
     t3 = time.time()
@@ -297,7 +349,7 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
         print("\t done overwriting xyz, v_(xyz)",t3-t2)
     #peculiar velocity
     _,z_obs,v_pec,_,_,_,_ = pecZ(x,y,z,vx,vy,vz,redshift)
-    h_out_gp['peculiarVelocity'][:] = v_pec
+    h_out_gp['peculiarVelocity'] = v_pec
     #obs mag
     #Calculate the oringal redshift 
     stepz = dtk.StepZ(200,0,500)
@@ -312,12 +364,12 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
         if("totalLuminositiesStellar" in key and  ":observed" in key and ("SDSS" in key or "LSST" in key)):
             new_key = key.replace("totalLuminositiesStellar",'magnitude',1)
             print("making: "+new_key+" from "+key)
-            h_out_gp[new_key][:]=adjust_mag -2.5*np.log10(h_out_gp[key].value)
+            h_out_gp[new_key]=adjust_mag -2.5*np.log10(h_out_gp[key].value)
         # Calculating new rest frame magnitudes
         if("totalLuminositiesStellar" in key and  ":rest" in key and ("SDSS" in key or "LSST" in key)):
             new_key = key.replace("totalLuminositiesStellar","magnitude",1)
             print("making: "+new_key+" from "+key)
-            h_out_gp[new_key][:]=-2.5*np.log10(h_out_gp[key].value)
+            h_out_gp[new_key]=-2.5*np.log10(h_out_gp[key].value)
 
     # redshift_org = h_out_gp['redshiftHubble'].value
 
@@ -338,21 +390,19 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
     if verbose:
         print("\t done rewriting mags",t5-t4)
     #redshift
-    h_out_gp['redshift'][:] = z_obs
-    h_out_gp['redshiftHubble'][:] = redshift
+    h_out_gp['redshift'] = z_obs
+    h_out_gp['redshiftHubble'] = redshift
     #TODO
     #metadata
     #galaxyID
-    h_out_gp['galaxyID'][:]=h_in['lightcone_id'].value
+    h_out_gp['galaxyID']=h_in['lightcone_id'].value
 
     h_out_gp['ra'] = h_in['ra'].value
     h_out_gp['dec'] = h_in['dec'].value
     central = (h_in['host_centric_x'].value ==0) & (h_in['host_centric_y'].value ==0) & (h_in['host_centric_z'].value == 0)
-    h_out_gp['isCentral'][:] = central
-    h_out_gp['hostHaloTag'][:] = h_in['target_halo_id'].value
-    h_out_gp['hostHaloMass'][:] = h_in['target_halo_mass'].value
-    #No longer used
-    del h_out_gp['placementType']
+    h_out_gp['isCentral'] = central
+    h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value
+    h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value
     tf = time.time()
     if verbose:
         print("\tDone overwrite columns", tf-t1)
@@ -402,8 +452,6 @@ def rotate_host_halo(rot, x,y,z):
 
 def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_loc, verbose=False):
     hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
-    del hgroup['hostHaloSODTag']
-    del hgroup['hostIndex']
 
     halo_tag = hgroup['hostHaloTag'].value
     size = halo_tag.size
@@ -419,7 +467,7 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     indx = dtk.search_sorted(sod_cat_mass,halo_tag,sorter=sod_cat_srt)
     slct = indx != -1
     sod_mass[slct] = sod_cat_mass[indx[slct]]
-    hgroup['hostHaloSODMass'][:]=sod_mass
+    hgroup['hostHaloSODMass']=sod_mass
 
     print("Num of galaxies: ", halo_tag.size)
     eg_cat_htag = dtk.gio_read(halo_shape_loc,'halo_id')
@@ -458,18 +506,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
     rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
     rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
-    hgroup['hostHaloEigenValue1'][:] = eg_cat_eg1
-    hgroup['hostHaloEigenValue2'][:] = eg_cat_eg2
-    hgroup['hostHaloEigenValue3'][:] = eg_cat_eg3
-    hgroup['hostHaloEigenVector1X'][:] = eg_cat_eg1_x
-    hgroup['hostHaloEigenVector1Y'][:] = eg_cat_eg1_y
-    hgroup['hostHaloEigenVector1Z'][:] = eg_cat_eg1_z
-    hgroup['hostHaloEigenVector2X'][:] = eg_cat_eg2_x
-    hgroup['hostHaloEigenVector2Y'][:] = eg_cat_eg2_y
-    hgroup['hostHaloEigenVector2Z'][:] = eg_cat_eg2_z
-    hgroup['hostHaloEigenVector3X'][:] = eg_cat_eg3_x
-    hgroup['hostHaloEigenVector3Y'][:] = eg_cat_eg3_y
-    hgroup['hostHaloEigenVector3Z'][:] = eg_cat_eg3_z
+    hgroup['hostHaloEigenValue1'] = eg_cat_eg1
+    hgroup['hostHaloEigenValue2'] = eg_cat_eg2
+    hgroup['hostHaloEigenValue3'] = eg_cat_eg3
+    hgroup['hostHaloEigenVector1X'] = eg_cat_eg1_x
+    hgroup['hostHaloEigenVector1Y'] = eg_cat_eg1_y
+    hgroup['hostHaloEigenVector1Z'] = eg_cat_eg1_z
+    hgroup['hostHaloEigenVector2X'] = eg_cat_eg2_x
+    hgroup['hostHaloEigenVector2Y'] = eg_cat_eg2_y
+    hgroup['hostHaloEigenVector2Z'] = eg_cat_eg2_z
+    hgroup['hostHaloEigenVector3X'] = eg_cat_eg3_x
+    hgroup['hostHaloEigenVector3Y'] = eg_cat_eg3_y
+    hgroup['hostHaloEigenVector3Z'] = eg_cat_eg3_z
 
 
     eg_cat_htag = dtk.gio_read(halo_shape_red_step_loc,'halo_id')[indx_slct]
@@ -488,18 +536,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
     rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
     rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
-    hgroup['hostHaloEigenValueReduced1'][:] = eg_cat_eg1
-    hgroup['hostHaloEigenValueReduced2'][:] = eg_cat_eg2
-    hgroup['hostHaloEigenValueReduced3'][:] = eg_cat_eg3
-    hgroup['hostHaloEigenVectorReduced1X'][:] = eg_cat_eg1_x
-    hgroup['hostHaloEigenVectorReduced1Y'][:] = eg_cat_eg1_y
-    hgroup['hostHaloEigenVectorReduced1Z'][:] = eg_cat_eg1_z
-    hgroup['hostHaloEigenVectorReduced2X'][:] = eg_cat_eg2_x
-    hgroup['hostHaloEigenVectorReduced2Y'][:] = eg_cat_eg2_y
-    hgroup['hostHaloEigenVectorReduced2Z'][:] = eg_cat_eg2_z
-    hgroup['hostHaloEigenVectorReduced3X'][:] = eg_cat_eg3_x
-    hgroup['hostHaloEigenVectorReduced3Y'][:] = eg_cat_eg3_y
-    hgroup['hostHaloEigenVectorReduced3Z'][:] = eg_cat_eg3_z
+    hgroup['hostHaloEigenValueReduced1'] = eg_cat_eg1
+    hgroup['hostHaloEigenValueReduced2'] = eg_cat_eg2
+    hgroup['hostHaloEigenValueReduced3'] = eg_cat_eg3
+    hgroup['hostHaloEigenVectorReduced1X'] = eg_cat_eg1_x
+    hgroup['hostHaloEigenVectorReduced1Y'] = eg_cat_eg1_y
+    hgroup['hostHaloEigenVectorReduced1Z'] = eg_cat_eg1_z
+    hgroup['hostHaloEigenVectorReduced2X'] = eg_cat_eg2_x
+    hgroup['hostHaloEigenVectorReduced2Y'] = eg_cat_eg2_y
+    hgroup['hostHaloEigenVectorReduced2Z'] = eg_cat_eg2_z
+    hgroup['hostHaloEigenVectorReduced3X'] = eg_cat_eg3_x
+    hgroup['hostHaloEigenVectorReduced3Y'] = eg_cat_eg3_y
+    hgroup['hostHaloEigenVectorReduced3Z'] = eg_cat_eg3_z
     return
 
     
@@ -514,7 +562,9 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
         hfile_steps.append(hfile)
         hfile_steps_gp.append(gp)
     keys = get_keys(hfile_steps_gp[0])
-    for key in keys:
+    for i,key in enumerate(keys):
+        t1 = time.time()
+        print(i,key)
         data_list = []
         #units = None
         for h_gp in hfile_steps_gp:
@@ -523,6 +573,7 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
         data = np.concatenate(data_list)
         hfile_gp_out[key]=data
         #hfile_gp_out[key].attrs['units']=units
+        print("\t time: {:.2f}".format(time.time()-t1))
     return 
 
 
@@ -703,11 +754,13 @@ if __name__ == "__main__":
     plot = param.get_bool('plot')
     use_dust_factor = param.get_bool('use_dust_factor')
     dust_factors = param.get_float_list('dust_factors')
+    ignore_mstar = param.get_bool('ignore_mstar')
     selection = galmatcher.read_selections()
     stepz = dtk.StepZ(200,0,500)
     output_step_list = []
     step_size = steps.size
     for i in range(0,step_size-1):
+
         t0 = time.time()
         step = steps[i+1]
         step2 = steps[i]
@@ -718,6 +771,7 @@ if __name__ == "__main__":
         lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
         output_step_loc = output_fname.replace("${step}",str(step))
         output_step_list.append(output_step_loc)
+        continue
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
@@ -725,6 +779,8 @@ if __name__ == "__main__":
         verbose = True
         lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
         if(use_slope):
+            print("Not to be used. We can't trust this method")
+            raise
             print("using slope", step)
             step_a = stepz.get_a(step)
             step2_a = stepz.get_a(step2)
@@ -785,7 +841,7 @@ if __name__ == "__main__":
             else:
                 gal_prop = gal_prop_simple
                 mask = mask_simple
-            index = resample_index(lc_data, gal_prop, verbose = verbose)
+            index = resample_index(lc_data, gal_prop, ignore_mstar = ignore_mstar, verbose = verbose)
 
             if plot:
                 plot_differences(lc_data, gal_prop, index)
@@ -798,11 +854,28 @@ if __name__ == "__main__":
                 plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
                 plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins)
                 plt.show()
-            exit()
-            copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
+            if use_dust_factor:
+                gal_prop_size = gal_prop['Mag_r'].size
+                dust_mod_index = index // gal_prop_size # which dust factor was matched in the frankenstein
+                raw_index = index % gal_prop_size #gal_prop index not looking at dust factor
+                #Now we get the dust factor for each match
+                matched_dust_factor = np.zeros(lc_data['redshift'].size,dtype='f4')
+                for ii in range(0,len(dust_factors)+1):
+                    slct = dust_mod_index == ii
+                    if ii == 0:
+                        matched_dust_factor[slct] == 1.0
+                    else:
+                        matched_dust_factor[slct] == dust_factors[ii]
+                print(np.shape(raw_index))
+                print(np.shape(matched_dust_factor))
+                copy_columns_dust(gltcs_step_fname, output_step_loc, 
+                                  raw_index, matched_dust_factor,
+                                  verbose = verbose,mask = mask, short = short, step = step)
+            else:
+                copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
    
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
         print("\n=====\ndone. {}".format(time.time()-t0))
     
-    # combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))
+    combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))
