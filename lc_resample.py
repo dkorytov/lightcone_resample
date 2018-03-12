@@ -35,9 +35,17 @@ def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     gal_prop['Mag_r']  = mag_r[mask]
     gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
     gal_prop['clr_ri'] = mag_r[mask]-mag_i[mask]
+    gal_prop['Mag_g']  = mag_g[mask]
+    gal_prop['Mag_i']  = mag_i[mask]
+    print(mag_g)
+    print(mag_r)
+    print(mag_i)
+    print(gal_prop['clr_gr'])
+    print(gal_prop['clr_ri'])
     if verbose:
         print('done loading gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
+
 
 def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = None, mag_r_cut = False):
     t1 = time.time()
@@ -57,16 +65,17 @@ def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = Non
     mag_g = mag_gd + (dust_factor-1.0)*mag_dgd
     mag_r = mag_rd + (dust_factor-1.0)*mag_drd
     mag_i = mag_id + (dust_factor-1.0)*mag_did
-    print("dust factor: ", dust_factor)
-    slct_fnt = np.isfinite(mag_g)
-    print(np.sum(mag_g[slct_fnt]-mag_gd[slct_fnt]))
-    print("num diff: ", np.sum( (mag_g[slct_fnt]-mag_gd[slct_fnt]) == 0), np.sum(slct_fnt))
-    slct_fnt = np.isfinite(mag_r)
-    print(np.sum(mag_r[slct_fnt]-mag_rd[slct_fnt]))
-    print("num diff: ", np.sum( (mag_r[slct_fnt]-mag_rd[slct_fnt]) == 0), np.sum(slct_fnt))
-    slct_fnt = np.isfinite(mag_i)
-    print(np.sum(mag_i[slct_fnt]-mag_id[slct_fnt]))
-    print("num diff: ", np.sum( (mag_i[slct_fnt]-mag_id[slct_fnt]) == 0), np.sum(slct_fnt))
+    if verbose:
+        print("dust factor: ", dust_factor)
+        slct_fnt = np.isfinite(mag_g)
+        print(np.sum(mag_g[slct_fnt]-mag_gd[slct_fnt]))
+        print("num diff: ", np.sum( (mag_g[slct_fnt]-mag_gd[slct_fnt]) == 0), np.sum(slct_fnt))
+        slct_fnt = np.isfinite(mag_r)
+        print(np.sum(mag_r[slct_fnt]-mag_rd[slct_fnt]))
+        print("num diff: ", np.sum( (mag_r[slct_fnt]-mag_rd[slct_fnt]) == 0), np.sum(slct_fnt))
+        slct_fnt = np.isfinite(mag_i)
+        print(np.sum(mag_i[slct_fnt]-mag_id[slct_fnt]))
+        print("num diff: ", np.sum( (mag_i[slct_fnt]-mag_id[slct_fnt]) == 0), np.sum(slct_fnt))
 
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
@@ -77,9 +86,24 @@ def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = Non
     gal_prop['Mag_r']  = mag_r[mask]
     gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
     gal_prop['clr_ri'] = mag_r[mask]-mag_i[mask]
+    gal_prop['Mag_g']  = mag_g[mask]
+    gal_prop['Mag_i']  = mag_i[mask]
+    #lum debuging
+    lum_gd = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value)
+    # lum_rd = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value)
+    # lum_id = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value)
+    lum_gnd =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value)
+    # lum_rnd =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value)
+    # lum_ind =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value)
+    lum_dgd = lum_gd - lum_gnd
+    lum_g = 10**(lum_gd + (dust_factor - 1.0)* delta_dust)
+    print("g lum vs mag: ", np.sum(-2.5*np.log10(lum_gd)!=mag_gd))
+    print("dust_mag_g vs dust_lum_g: ", np.sum( -2.5*np.log10(lum_g) != mag_g))
+    exit()
     if verbose:
         print('done loading gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
+
 
 def cat_dics(dics, keys = None):
     new_dic = {}
@@ -207,6 +231,9 @@ def get_keys(hgroup):
     return keys
 
 
+copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','placementType','isCentral','hostIndex')
+copy_avoids_ptrn = ('hostHalo','magnitude')
+
 def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, short = False, step = -1):
     h_in = h5py.File(input_fname,'r')
     h_out = h5py.File(output_fname,'w')
@@ -218,6 +245,13 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
+        if "SDSS" not in key and "total" not in key and "rest" not in key and "totalMassStellar" != key:
+            if supershort:
+                continue
+        if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
+            print("{} isn't copied".format(key))
+            continue
+
         print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
         data = h_in_gp[key].value
         if mask is not None:
@@ -228,8 +262,7 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         #h_out_gp[key].attrs['units'] = a
     return
 
-copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','placementType','isCentral','hostIndex')
-copy_avoids_ptrn = ('hostHalo','magnitude')
+
 def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose = False,mask = None, short = False, step = -1):
     h_in = h5py.File(input_fname,'r')
     h_out = h5py.File(output_fname,'w')
@@ -237,6 +270,7 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
     h_out_gp = h_out.create_group('galaxyProperties')
     keys = get_keys(h_in_gp)
     for i in range(0,len(keys)):
+        t1 = time.time()
         key = keys[i]
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
@@ -244,23 +278,30 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
         if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
             print("{} isn't copied".format(key))
             continue
-
-        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
+        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key), end='')
         if ":dustAtlas" in key:
+            print("dust factor: ", dust_factor)
+            org_data = h_in_gp[key].value[mask][raw_index]
             nd_key = key.replace(":dustAtlas","")
-            dust_data =  np.log(h_in_gp[key].value[mask][index])
-            no_dust_data = np.log(h_in_gp[key].value[mask][index])
-            delta_dust = no_dust_data - dust_data
-            data = 10**(dust_data + (dust_factor -1 ) * delta_dust)
+            dust_data =  np.log10(h_in_gp[key].value[mask][raw_index])
+            no_dust_data = np.log10(h_in_gp[nd_key].value[mask][raw_index])
+            delta_dust = dust_data - no_dust_data
+            data = 10**(dust_data + (dust_factor -1.0)*delta_dust)
+            # nd_key = key.replace(":dustAtlas","")
+            # dust_data =  np.log10(h_in_gp[key].value[mask][index])
+            # no_dust_data = np.log10(h_in_gp[nd_key].value[mask][index])
+            # delta_dust = dust_data - no_dust_data 
+            # data = 10**(dust_data + (dust_factor -1.0 ) * delta_dust)
+            # print(h_in_gp[key][mask][index])
+            # print(data)
+            # print("sum diff: ", np.sum(h_in_gp[key][mask][index] - data))
         else:
             data = h_in_gp[key].value
             if mask is not None:
                 data = data[mask]
-            data = data[index]
-        if "dustMass" in key:
-            data = data*dust_factor
+            data = data[raw_index]
         h_out_gp[key]=data
-
+        print(" time: {}".format(time.time()-t1))
         #TODO add units
         #a = h_in_gp[key].attrs['units'].value
         #h_out_gp[key].attrs['units'] = a
@@ -691,6 +732,38 @@ def plot_mag_r(lc_data,gal_prop,index):
     return
 
 
+def plot_m_star(lc_data,gal_prop,index):
+    plt.figure()
+    max_r = np.max((np.max(lc_data['m_star']),np.max(gal_prop['m_star'][index])))
+    min_r = np.min((np.min(lc_data['m_star']),np.min(gal_prop['m_star'][index])))
+    bins = np.linspace(min_r,max_r,100)
+    h_lc,_ = np.histogram(lc_data['m_star'],bins=bins)
+    h_mg,_ = np.histogram(gal_prop['m_star'][index],bins=bins)
+    plt.plot(dtk.bins_avg(bins),h_lc, 'b', label='UMachine-SDSS')
+    plt.plot(dtk.bins_avg(bins),h_mg, 'r', label='Matched Glctcs')
+    plt.grid()
+    plt.xlabel("log10(Stellar Mass)")
+    plt.ylabel('Count')
+    plt.legend(loc='best')
+    return
+
+
+def plot_single_dist(lc_data,gal_prop,index,key_name,key_label):
+    plt.figure()
+    max_r = np.max((np.max(lc_data[key_name]),np.max(gal_prop[key_name][index])))
+    min_r = np.min((np.min(lc_data[key_name]),np.min(gal_prop[key_name][index])))
+    bins = np.linspace(min_r,max_r,100)
+    h_lc,_ = np.histogram(lc_data[key_name],bins=bins)
+    h_mg,_ = np.histogram(gal_prop[key_name][index],bins=bins)
+    plt.plot(dtk.bins_avg(bins),h_lc, 'b', label='UMachine-SDSS')
+    plt.plot(dtk.bins_avg(bins),h_mg, 'r', label='Matched Glctcs')
+    plt.grid()
+    plt.xlabel(key_label)
+    plt.ylabel('Count')
+    plt.legend(loc='best')
+    return
+
+
 def plot_clr_mag(lc_data,gal_prop,index,mag_bins,data_key, data_name):
     fig,ax = plt.subplots(1,len(mag_bins),figsize=(15,5))
     # max_gr = np.max((np.max(lc_data[data_key]),np.max(gal_prop[data_key])))
@@ -750,6 +823,7 @@ if __name__ == "__main__":
     steps = param.get_int_list('steps')
     use_slope = param.get_bool('use_slope')
     short = param.get_bool('short')
+    supershort = param.get_bool('supershort')
     substeps = param.get_int('substeps')
     plot = param.get_bool('plot')
     use_dust_factor = param.get_bool('use_dust_factor')
@@ -760,7 +834,6 @@ if __name__ == "__main__":
     output_step_list = []
     step_size = steps.size
     for i in range(0,step_size-1):
-
         t0 = time.time()
         step = steps[i+1]
         step2 = steps[i]
@@ -771,7 +844,6 @@ if __name__ == "__main__":
         lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
         output_step_loc = output_fname.replace("${step}",str(step))
         output_step_list.append(output_step_loc)
-        continue
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
@@ -844,30 +916,46 @@ if __name__ == "__main__":
             index = resample_index(lc_data, gal_prop, ignore_mstar = ignore_mstar, verbose = verbose)
 
             if plot:
-                plot_differences(lc_data, gal_prop, index)
-                #plot_differences_2d(lc_data, gal_prop, index)
+                #plot_differences(lc_data, gal_prop, index)
+                #    plot_differences_2d(lc_data, gal_prop, index)
                 #plot_differences_2d(lc_data, gal_prop, index, x='m_star')
-                plot_side_by_side(lc_data, gal_prop, index)
+                #
                 mag_bins = (-21,-20,-19)
-                plot_mag_r(lc_data, gal_prop, index)
-                plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
-                plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
-                plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins)
-                plt.show()
+                #plot_mag_r(lc_data, gal_prop, index)
+                plot_m_star(lc_data, gal_prop, index)
+                #plot_side_by_side(lc_data, gal_prop, index)
+                plot_single_dist(lc_data, gal_prop, index, 'clr_gr', 'g-r')
+                #plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
+                # plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
+                # plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins)
+                
             if use_dust_factor:
                 gal_prop_size = gal_prop['Mag_r'].size
                 dust_mod_index = index // gal_prop_size # which dust factor was matched in the frankenstein
-                raw_index = index % gal_prop_size #gal_prop index not looking at dust factor
+                raw_index = index % (gal_prop_size//(1+len(dust_factors))) #gal_prop index not looking at dust factor
                 #Now we get the dust factor for each match
                 matched_dust_factor = np.zeros(lc_data['redshift'].size,dtype='f4')
+                print(0,"--",len(dust_factors)+1)
+                print("dust_mod_index", dust_mod_index)
+                print("raw_index", raw_index)
                 for ii in range(0,len(dust_factors)+1):
+
                     slct = dust_mod_index == ii
+                    print(ii,'dust_index {}/{}'.format(np.sum(slct),slct.size))
                     if ii == 0:
-                        matched_dust_factor[slct] == 1.0
+                        print("ii == 0")
+                        print(slct)
+                        print(np.sum(slct))
+                        print(np.shape(slct))
+                        print("===========")
+                        matched_dust_factor[slct] = 1.0
+                        print(matched_dust_factor)
+                        print(matched_dust_factor[slct])
                     else:
-                        matched_dust_factor[slct] == dust_factors[ii]
-                print(np.shape(raw_index))
-                print(np.shape(matched_dust_factor))
+                        matched_dust_factor[slct] == dust_factors[ii-1]
+                print("matched_dust_factor")
+                print(matched_dust_factor)
+                print(np.min(matched_dust_factor),"->",np.max(matched_dust_factor))
                 copy_columns_dust(gltcs_step_fname, output_step_loc, 
                                   raw_index, matched_dust_factor,
                                   verbose = verbose,mask = mask, short = short, step = step)
@@ -876,6 +964,20 @@ if __name__ == "__main__":
    
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
+        if plot:
+            new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose)
+            index = np.arange(lc_data['redshift'].size)
+            plt.figure()
+            plt.plot(lc_data['clr_gr'], new_gal_prop['clr_gr'], '.', alpha=0.3)
+            plt.figure()
+            plt.plot(lc_data['Mag_r'], new_gal_prop['Mag_r'], '.', alpha=0.3)
+            plt.figure()
+            plt.plot(lc_data['m_star'], new_gal_prop['m_star'], '.', alpha=0.3)
+
+            plot_m_star(lc_data, new_gal_prop, index)
+            #plot_side_by_side(lc_data, new_gal_prop, index)
+            plot_single_dist(lc_data, new_gal_prop, index, 'clr_gr', 'g-r')
+            plt.show()
         print("\n=====\ndone. {}".format(time.time()-t0))
     
-    combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))
+    #combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))
