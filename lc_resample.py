@@ -90,16 +90,18 @@ def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = Non
     gal_prop['Mag_i']  = mag_i[mask]
     #lum debuging
     lum_gd = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value)
-    # lum_rd = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value)
+    lum_rd = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value)
     # lum_id = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value)
     lum_gnd =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value)
-    # lum_rnd =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value)
+    lum_rnd =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value)
     # lum_ind =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value)
     lum_dgd = lum_gd - lum_gnd
-    lum_g = 10**(lum_gd + (dust_factor - 1.0)* delta_dust)
+    lum_g = 10**(lum_gd + (dust_factor - 1.0)* lum_dgd)
+    
+    lum_g = 10**(lum_gd + (dust_factor - 1.0)* lum_dgd)
     print("g lum vs mag: ", np.sum(-2.5*np.log10(lum_gd)!=mag_gd))
-    print("dust_mag_g vs dust_lum_g: ", np.sum( -2.5*np.log10(lum_g) != mag_g))
-    exit()
+    print("dust_mag_g vs dust_lum_g: ", np.sum( -2.5*np.log10(lum_g) != mag_g), mag_g.shape)
+    print("dust_mag_g vs dust_lum_g: ", np.nansum( -2.5*np.log10(lum_g) - mag_g))
     if verbose:
         print('done loading gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
@@ -245,7 +247,7 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
-        if "SDSS" not in key and "total" not in key and "rest" not in key and "totalMassStellar" != key:
+        if "SDSS" not in key and "total" not in key and ":rest" not in key and "totalMassStellar" != key:
             if supershort:
                 continue
         if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
@@ -268,6 +270,7 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
     h_out = h5py.File(output_fname,'w')
     h_in_gp = h_in['galaxyProperties']
     h_out_gp = h_out.create_group('galaxyProperties')
+    h_out_gp['dustFactor'] = dust_factor
     keys = get_keys(h_in_gp)
     for i in range(0,len(keys)):
         t1 = time.time()
@@ -275,12 +278,14 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
+        if "SDSS" not in key and "total" not in key and ":rest" not in key and "totalMassStellar" != key:
+            if supershort:
+                continue
         if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
             print("{} isn't copied".format(key))
             continue
         print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key), end='')
         if ":dustAtlas" in key:
-            print("dust factor: ", dust_factor)
             org_data = h_in_gp[key].value[mask][raw_index]
             nd_key = key.replace(":dustAtlas","")
             dust_data =  np.log10(h_in_gp[key].value[mask][raw_index])
@@ -301,7 +306,7 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
                 data = data[mask]
             data = data[raw_index]
         h_out_gp[key]=data
-        print(" time: {}".format(time.time()-t1))
+        print("\n\ttime: {}".format(time.time()-t1))
         #TODO add units
         #a = h_in_gp[key].attrs['units'].value
         #h_out_gp[key].attrs['units'] = a
@@ -440,6 +445,12 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
 
     h_out_gp['ra'] = h_in['ra'].value
     h_out_gp['dec'] = h_in['dec'].value
+    h_out_gp['ra_lensed'] = h_in['ra_lensed'].value
+    h_out_gp['dec_lensed'] = h_in['dec_lensed'].value
+    h_out_gp['shear1'] = h_in['shear1'].value
+    h_out_gp['shear2'] = h_in['shear2'].value
+    h_out_gp['magnification'] = h_in['magnification'].value
+    h_out_gp['convergence'] = h_in['convergence'].value
     central = (h_in['host_centric_x'].value ==0) & (h_in['host_centric_y'].value ==0) & (h_in['host_centric_z'].value == 0)
     h_out_gp['isCentral'] = central
     h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value
@@ -593,6 +604,7 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
 
     
 def combine_step_lc_into_one(step_fname_list, out_fname):
+    print("combining into one file")
     hfile_out = h5py.File(out_fname,'w')
     hfile_gp_out = hfile_out.create_group('galaxyProperties')
     hfile_steps = []
@@ -603,6 +615,7 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
         hfile_steps.append(hfile)
         hfile_steps_gp.append(gp)
     keys = get_keys(hfile_steps_gp[0])
+    print(keys)
     for i,key in enumerate(keys):
         t1 = time.time()
         print(i,key)
@@ -618,24 +631,148 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
     return 
 
 
-def add_metadata_units(gal_prop_fname, out_fname):
+def add_metadata(gal_ref_fname, out_fname):
     """
     Takes the metadata group and copies it over the final output product. 
     Also for each data column, copies the units attribute. 
     """
-    hfile_gp = h5py.File(gal_prop_fname,'r')
+    add_units(out_fname)
+    hfile_gf = h5py.File(gal_ref_fname,'r')
     hfile_out = h5py.File(out_fname,'a')
-    keys_a = get_keys(hfile_gp['galaxyProperties'])
-    keys_b = get_keys(hfile_out['galaxyProperties'])
-    assert(len(keys_a) == len(keys_b))
-    for key in keys_a:
-        assert(key in keys_b)
-    for key in keys_a:
-        hfile_out['galaxyProperties'][key].attrs['units'] = hfile_gp['galaxyProperties'][key].attrs['units']
-    #copy over metadata
-    hfile_out.copy(hfile_gp['metaData'],'metaData')
+    # keys_a = get_keys(hfile_gf['galaxyProperties'])
+    # keys_b = get_keys(hfile_out['galaxyProperties'])
+    # #assert(len(keys_a) == len(keys_b))
+    # print(keys_a)
+    # print(keys_b)
+    # for key in keys_b:
+    #     print(key)
+    #     if( key not in keys_a):
+    #         print("^^^this ========== this^^^")
+    # for key in keys_b:
+    #     hfile_out['galaxyProperties'][key].attrs['units'] = hfile_gf['galaxyProperties'][key].attrs['units']
+    # #copy over metadata
+    hfile_out.copy(hfile_gf['metaData'],'metaData')
     del hfile_out['/metaData/catalogCreationDate']
     hfile_out['/metaData/catalogCreationDate']=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+
+def add_units(out_fname):
+    hfile = h5py.File(out_fname,'a')['galaxyProperties']
+    #################################
+    ###Add units to all fields
+    #################################
+    mag_list = ['magnitude']; mag_unit = 'AB magnitude'
+    arcsec_list= ['Arcsec']; arcsec_unit = 'arcsecond'
+    rad_list = []; rad_unit ='radians'
+    deg_list = ['ra','dec','positionAngle','inclination']; deg_unit = 'degrees'
+    phys_kpc_list = ['Radius']; phys_kpc_unit = 'physical kpc'
+    phys_mpc_list = []; phys_mpc_unit = 'physical Mpc'
+    reduced_dist_list =['Reduced','EigenVector'];reduced_dist_unit = 'unitless'
+    eigen_val_list = ['EigenValue'];eigen_val_unit = 'comoving Mpc/h'
+    comv_mpc_list = ['x','y','z']; comv_mpc_unit = 'comoving Mpc/h'
+    vel_list = ['vx','vy','vz','Velocity']; vel_unit = 'km/s'
+    timeSFR_list =['TimeWeightedIntegratedSFR']; timeSFR_unit = 'Gyr*Msun'
+    sfr_list =['SFR','blackHoleAccretionRate','StarFormationRate']; sfr_unit = 'Msun/Gyr'
+    mass_list =['Mass','IntegratedSFR']; mass_unit = 'Msun'
+    abundance_list =['Abundance'];abundance_unit = 'Msun'
+    luminosity_list =['Luminosities','Luminosity']; luminosity_unit = 'AB luminosity (4.4659e13 W/Hz)'
+    unitless_list = ['redshift','shear','magnification','convergence','Ellipticity','Sersic','AxisRatio','dustFactor']; unitless_unit ='unitless'
+    id_list = ['Index','Tag','placementType','galaxyID','lightcone_replication','lightcone_rotation']; id_unit = 'id/index'
+    angular_list = ['angularMomentum'];angular_unit = 'Msun*km/s*Mpc'
+    bool_list =['nodeIsIsolated'];bool_unit = 'boolean'
+    spinSpin_list =['spinSpin'];spinSpin_unit ='lambda'
+    step_list = ['step'];step_unit = 'simluation step'
+    print("assigning units")
+    keys = get_keys(hfile)
+    print( keys)
+    for key in keys:
+        print(key)
+        #add magnitude units
+        if(any(l in key for l in mag_list)):
+            hfile[key].attrs['units']=mag_unit
+            print("\t mag")
+            #add arcsec units
+        elif(any(l in key for l in arcsec_list)):
+            hfile[key].attrs['units']=arcsec_unit
+            print( "\t ",arcsec_unit)
+            #add rad units
+        elif(any(l in key for l in rad_list)):
+            hfile[key].attrs['units']=rad_unit
+            print( "\t ",rad_unit)
+            #add degree units
+        elif(any(l in key for l in deg_list)):
+            hfile[key].attrs['units']=deg_unit
+            print( '\t',deg_unit)
+            #add kpc units
+        elif(any(l in key for l in phys_kpc_list)):
+            hfile[key].attrs['units']=phys_kpc_unit
+            print( "\t ",phys_kpc_unit)
+            #add mpc units
+        elif(any(l in key for l in phys_mpc_list)):
+            hfile[key].attrs['units']=phys_mpc_unit
+            print ("\t ",phys_mpc_unit)
+            #reduced distances units
+        elif(any(l in key for l in reduced_dist_list)):
+            hfile[key].attrs['units']=reduced_dist_unit
+            print ("\t ",reduced_dist_unit)
+            #eigen val units
+        elif(any(l in key for l in eigen_val_list)):
+            hfile[key].attrs['units']=eigen_val_unit
+            print ("\t ",reduced_dist_unit)
+            #add comoving mpc units
+        elif(any(l == key for l in comv_mpc_list)):
+            hfile[key].attrs['units']=comv_mpc_unit
+            print ("\t ",comv_mpc_unit)
+            #add velocity units
+        elif(any(l in key for l in vel_list)):
+            hfile[key].attrs['units']=vel_unit
+            print ("\t ",vel_unit)
+            #add timesfr
+        elif(any(l in key for l in timeSFR_list)):
+            hfile[key].attrs['units']=timeSFR_unit
+            print ("\t ",timeSFR_unit)
+            #add sfr
+        elif(any(l in key for l in sfr_list)):
+            hfile[key].attrs['units']=sfr_unit
+            print ("\t ",sfr_unit)
+            #add mass
+        elif(any(l in key for l in mass_list)):
+            hfile[key].attrs['units']=mass_unit
+            print ("\t ",mass_unit)
+            #add abundance
+        elif(any(l in key for l in abundance_list)):
+            hfile[key].attrs['units']=abundance_unit
+            print ("\t ",abundance_unit)
+            #add luminosity units
+        elif(any(l in key for l in luminosity_list)):
+            hfile[key].attrs['units']=luminosity_unit
+            print ("\t ",luminosity_unit)
+            #add unit less
+        elif(any(l in key for l in unitless_list)):
+            hfile[key].attrs['units']=unitless_unit
+            print ("\t ",unitless_unit)
+            #add mass units
+        elif(any(l in key for l in id_list)):
+            hfile[key].attrs['units']=id_unit
+            print ("\t ",id_unit)
+            #angular momentum 
+        elif(any(l in key for l in angular_list)):
+            hfile[key].attrs['units']=angular_unit
+            print ("\t ",angular_unit)
+            #boolean
+        elif(any(l in key for l in bool_list)):
+            hfile[key].attrs['units']=bool_unit
+            print ("\t", bool_unit)
+            #spinSpin
+        elif(any(l in key for l in spinSpin_list)):
+            hfile[key].attrs['units']=spinSpin_unit
+            #step
+        elif(any(l in key for l in step_list)):
+            hfile[key].attrs['units']=step_unit
+            #Everything should have a unit!
+        else:
+            print("column", key, "was not assigned a unit :(")
+            raise;
 
 
 def plot_differences(lc_data, gal_prop, index):
@@ -688,7 +825,7 @@ def plot_differences_2d(lc_data, gal_prop,index, x='Mag_r'):
 
  
 def plot_side_by_side(lc_data, gal_prop, index, x='Mag_r'):
-    keys =  gal_prop.keys()
+    keys =  ['Mag_r','clr_gr','clr_ri','m_star']
     for key in keys:
         if key == x:
             continue
@@ -748,11 +885,12 @@ def plot_m_star(lc_data,gal_prop,index):
     return
 
 
-def plot_single_dist(lc_data,gal_prop,index,key_name,key_label):
+def plot_single_dist(lc_data,gal_prop,index,key_name,key_label,bins = None):
     plt.figure()
-    max_r = np.max((np.max(lc_data[key_name]),np.max(gal_prop[key_name][index])))
-    min_r = np.min((np.min(lc_data[key_name]),np.min(gal_prop[key_name][index])))
-    bins = np.linspace(min_r,max_r,100)
+    if bins is None:
+        max_r = np.max((np.max(lc_data[key_name]),np.max(gal_prop[key_name][index])))
+        min_r = np.min((np.min(lc_data[key_name]),np.min(gal_prop[key_name][index])))
+        bins = np.linspace(min_r,max_r,100)
     h_lc,_ = np.histogram(lc_data[key_name],bins=bins)
     h_mg,_ = np.histogram(gal_prop[key_name][index],bins=bins)
     plt.plot(dtk.bins_avg(bins),h_lc, 'b', label='UMachine-SDSS')
@@ -815,6 +953,7 @@ if __name__ == "__main__":
     param = dtk.Param(sys.argv[1])
     lightcone_fname = param.get_string('lightcone_fname')
     gltcs_fname = param.get_string('gltcs_fname')
+    gltcs_metadata_ref = param.get_string('gltcs_metadata_ref')
     gltcs_slope_fname = param.get_string('gltcs_slope_fname')
     sod_fname = param.get_string("sod_fname")
     halo_shape_fname = param.get_string("halo_shape_fname")
@@ -902,14 +1041,14 @@ if __name__ == "__main__":
             if use_dust_factor:
                 masks = []
                 gal_props = []
+                masks.append(mask_simple)
+                gal_props.append(gal_prop_simple)
                 for dust_factor in dust_factors:
                     gp, m = construct_gal_prop_dust_factor(gltcs_step_fname, dust_factor, verbose = verbose,mask =mask)
                     gal_props.append(gp)
                     masks.append(m)
-                masks.append(mask_simple)
-                gal_props.append(gal_prop_simple)
                 gal_prop = cat_dics(gal_props)
-                mask_use = np.concatenate(masks)
+                mask = mask_simple#//np.concatenate(masks)
             else:
                 gal_prop = gal_prop_simple
                 mask = mask_simple
@@ -917,42 +1056,39 @@ if __name__ == "__main__":
 
             if plot:
                 #plot_differences(lc_data, gal_prop, index)
-                #    plot_differences_2d(lc_data, gal_prop, index)
+                #plot_differences_2d(lc_data, gal_prop, index)
                 #plot_differences_2d(lc_data, gal_prop, index, x='m_star')
-                #
                 mag_bins = (-21,-20,-19)
                 #plot_mag_r(lc_data, gal_prop, index)
                 plot_m_star(lc_data, gal_prop, index)
                 #plot_side_by_side(lc_data, gal_prop, index)
-                plot_single_dist(lc_data, gal_prop, index, 'clr_gr', 'g-r')
+                plot_single_dist(lc_data, gal_prop, index, 'clr_gr', 'g-r',bins=np.linspace(0,1.2,100))
                 #plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
                 # plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
                 # plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins)
                 
             if use_dust_factor:
-                gal_prop_size = gal_prop['Mag_r'].size
-                dust_mod_index = index // gal_prop_size # which dust factor was matched in the frankenstein
-                raw_index = index % (gal_prop_size//(1+len(dust_factors))) #gal_prop index not looking at dust factor
+                gal_prop_size = gal_prop['Mag_r'].size//(1+len(dust_factors)) #The data is replicated 1+N where n is the number of dust factors used
+                dust_mod_index = index //( gal_prop_size) # which dust factor was matched in the frankenstein
+                raw_index = index % (gal_prop_size) #gal_prop index not looking at dust factor
                 #Now we get the dust factor for each match
                 matched_dust_factor = np.zeros(lc_data['redshift'].size,dtype='f4')
                 print(0,"--",len(dust_factors)+1)
                 print("dust_mod_index", dust_mod_index)
                 print("raw_index", raw_index)
                 for ii in range(0,len(dust_factors)+1):
-
                     slct = dust_mod_index == ii
                     print(ii,'dust_index {}/{}'.format(np.sum(slct),slct.size))
                     if ii == 0:
                         print("ii == 0")
-                        print(slct)
-                        print(np.sum(slct))
-                        print(np.shape(slct))
-                        print("===========")
                         matched_dust_factor[slct] = 1.0
-                        print(matched_dust_factor)
                         print(matched_dust_factor[slct])
                     else:
-                        matched_dust_factor[slct] == dust_factors[ii-1]
+                        print("ii != 0")
+                        print(dust_factors)
+                        print(dust_factors[ii-1])
+                        matched_dust_factor[slct] = dust_factors[ii-1]
+                        print(matched_dust_factor[slct])
                 print("matched_dust_factor")
                 print(matched_dust_factor)
                 print(np.min(matched_dust_factor),"->",np.max(matched_dust_factor))
@@ -965,19 +1101,29 @@ if __name__ == "__main__":
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
         if plot:
-            new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose)
-            index = np.arange(lc_data['redshift'].size)
-            plt.figure()
-            plt.plot(lc_data['clr_gr'], new_gal_prop['clr_gr'], '.', alpha=0.3)
-            plt.figure()
-            plt.plot(lc_data['Mag_r'], new_gal_prop['Mag_r'], '.', alpha=0.3)
-            plt.figure()
-            plt.plot(lc_data['m_star'], new_gal_prop['m_star'], '.', alpha=0.3)
 
-            plot_m_star(lc_data, new_gal_prop, index)
-            #plot_side_by_side(lc_data, new_gal_prop, index)
-            plot_single_dist(lc_data, new_gal_prop, index, 'clr_gr', 'g-r')
+            dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
+            new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
+            index = np.arange(lc_data['redshift'].size)
+            # plt.figure()
+            # plt.plot(lc_data['clr_gr'], new_gal_prop['clr_gr'], '.', alpha=0.3)
+            # plt.figure()
+            # plt.plot(lc_data['Mag_r'], new_gal_prop['Mag_r'], '.', alpha=0.3)
+            # plt.figure()
+            # plt.plot(lc_data['m_star'], new_gal_prop['m_star'], '.', alpha=0.3)
+            
+            plt.figure()
+            plt.title(" org gal prop vs new gal prop")
+            plt.plot(gal_prop['m_star'][index], new_gal_prop['m_star'],'.',alpha=0.3)
+            plot_mag_r(lc_data, new_gal_prop, index)
+            plot_side_by_side(lc_data, new_gal_prop, index)
+            plot_clr_mag(lc_data, new_gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
+            plot_clr_mag(lc_data, new_gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
+            plot_ri_gr_mag(lc_data, new_gal_prop, index, mag_bins)
+
             plt.show()
         print("\n=====\ndone. {}".format(time.time()-t0))
+    output_all = output_fname.replace("${step}","all")
+    combine_step_lc_into_one(output_step_list, output_all)
+    add_metadata(gltcs_metadata_ref, output_all)
     
-    #combine_step_lc_into_one(output_step_list, output_fname.replace("${step}","all"))
