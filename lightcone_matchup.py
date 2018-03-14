@@ -3,6 +3,7 @@
 from __future__ import print_function, division
 
 import numpy as np
+import matplotlib.pyplot as plt
 import h5py 
 import dtk
 import sys
@@ -10,7 +11,7 @@ import time
 import datetime
 from astropy.table import Table
 
-def load_lightcone(lc_fname):
+def load_lightcone(lc_fname,shr_fname):
     print("loading lightcone...",end='')
     t1 = time.time()
     lc = {}
@@ -21,11 +22,18 @@ def load_lightcone(lc_fname):
     lc['vy'] = np.fromfile(lc_fname.replace("${var}","vy"),dtype='f4')
     lc['vz'] = np.fromfile(lc_fname.replace("${var}","vz"),dtype='f4')
     lc['id'] = np.fromfile(lc_fname.replace("${var}","id"),dtype='i8')
-    lc['ra'] = np.fromfile(lc_fname.replace("${var}","phi"),dtype='f4')
-    lc['dec'] = np.fromfile(lc_fname.replace("${var}","theta"),dtype='f4')
+    lc['ra'] = np.fromfile(lc_fname.replace("${var}","phi"),dtype='f4')/3600.0-2.5
+    lc['dec'] = (np.fromfile(lc_fname.replace("${var}","theta"),dtype='f4')/3600.0)-2.5
     lc['redshift'] = np.fromfile(lc_fname.replace("${var}","redshift"),dtype='f4')
     lc['lightcone_rotation'] = np.fromfile(lc_fname.replace("${var}","rotation"),dtype='i4')
     lc['lightcone_replication'] = np.fromfile(lc_fname.replace("${var}","replication"),dtype='i4')
+    #shear info
+    lc['ra_lensed'] = np.fromfile(shr_fname.replace("${var}","xr2"),dtype='f4')/3600.0
+    lc['dec_lensed'] = np.fromfile(shr_fname.replace("${var}","xr1"),dtype='f4')/3600.0
+    lc['shear1'] = np.fromfile(shr_fname.replace("${var}","sr1"),dtype='f4')
+    lc['shear2'] = np.fromfile(shr_fname.replace("${var}","sr2"),dtype='f4')
+    lc['magnification'] = np.fromfile(shr_fname.replace("${var}","mra"),dtype='f4')
+    lc['convergence'] = np.fromfile(shr_fname.replace("${var}","kr0"),dtype='f4')
     print("done {}".format(time.time()-t1))
     return lc
 
@@ -73,14 +81,18 @@ def match_up(lc, ss, output):
 if __name__ == "__main__":
     param = dtk.Param(sys.argv[1])
     lightcone_bin_fname = param.get_string("lightcone_bin_fname")
+    shear_bin_fname = param.get_string("shear_bin_fname")
     snapshot_galaxy_fname = param.get_string("snapshot_galaxy_fname")
     lightcone_output_fname = param.get_string("lightcone_output_fname")
     steps = param.get_int_list("steps")
+    steps_shr = param.get_string_list("steps_shr")
     t0 =time.time()
-    for step in steps:
+    for step,step_shr in zip(steps,steps_shr):
         t1 = time.time()
         print("\n\n=====================\n STEP: {}".format(step))
-        lc = load_lightcone(lightcone_bin_fname.replace("${step}",str(step)))
+        lightcone_step_fname = lightcone_bin_fname.replace("${step}",str(step))
+        shear_step_fname = shear_bin_fname.replace("${step}",str(step)).replace("${step_shr}",step_shr)
+        lc = load_lightcone(lightcone_step_fname, shear_step_fname)
         ss = load_snapshot(snapshot_galaxy_fname.replace("${step}",str(step)))
         output_fname = lightcone_output_fname.replace("${step}",str(step))
         match_up(lc, ss, output_fname)
