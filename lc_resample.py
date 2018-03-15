@@ -443,10 +443,10 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
     #galaxyID
     h_out_gp['galaxyID']=h_in['lightcone_id'].value
 
-    h_out_gp['ra'] = h_in['ra'].value
-    h_out_gp['dec'] = h_in['dec'].value
-    h_out_gp['ra_lensed'] = h_in['ra_lensed'].value
-    h_out_gp['dec_lensed'] = h_in['dec_lensed'].value
+    h_out_gp['ra_true'] = h_in['ra'].value
+    h_out_gp['dec_true'] = h_in['dec'].value
+    h_out_gp['ra'] = h_in['ra_lensed'].value
+    h_out_gp['dec'] = h_in['dec_lensed'].value
     h_out_gp['shear1'] = h_in['shear1'].value
     h_out_gp['shear2'] = h_in['shear2'].value
     h_out_gp['magnification'] = h_in['magnification'].value

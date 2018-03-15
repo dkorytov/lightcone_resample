@@ -23,7 +23,7 @@ def load_lightcone(lc_fname,shr_fname):
     lc['vz'] = np.fromfile(lc_fname.replace("${var}","vz"),dtype='f4')
     lc['id'] = np.fromfile(lc_fname.replace("${var}","id"),dtype='i8')
     lc['ra'] = np.fromfile(lc_fname.replace("${var}","phi"),dtype='f4')/3600.0-2.5
-    lc['dec'] = (np.fromfile(lc_fname.replace("${var}","theta"),dtype='f4')/3600.0)-2.5
+    lc['dec'] = (np.fromfile(lc_fname.replace("${var}","theta"),dtype='f4')/3600.0)-87.5
     lc['redshift'] = np.fromfile(lc_fname.replace("${var}","redshift"),dtype='f4')
     lc['lightcone_rotation'] = np.fromfile(lc_fname.replace("${var}","rotation"),dtype='i4')
     lc['lightcone_replication'] = np.fromfile(lc_fname.replace("${var}","replication"),dtype='i4')
@@ -59,6 +59,12 @@ def match_up(lc, ss, output):
     indx = dtk.search_sorted(ss_id, lc['id'], sorter=srt)
     num_not_found = np.sum(indx == -1)
     print("num not found: ",num_not_found)
+    plt.figure()
+    plt.plot(ss['x'],ss['y'],'.',alpha=0.3)
+    plt.figure()
+    plt.plot(lc['x'],lc['y'],'.',alpha=0.3)
+    plt.show()
+    exit()
     assert(num_not_found == 0)
     hfile = h5py.File(output,'w')
     lc_keys = lc.keys()
@@ -77,6 +83,22 @@ def match_up(lc, ss, output):
     print('done. ',time.time()-t1)
     hfile.close()
 
+def cat_dics(dics, keys = None):
+    new_dic = {}
+    if keys is None:
+        keys = dics[0].keys()
+    for key in keys:
+        new_dic[key] = []
+        for dic in dics:
+            new_dic[key].append(dic[key])
+        new_dic[key] = np.concatenate(new_dic[key])
+    return new_dic
+
+def dic_to_hdf5(fname, dic):
+    hfile = h5py.File(fname,'w')
+    for key in dic.keys():
+        hfile[key] = dic[key]
+    hfile.close()
 
 if __name__ == "__main__":
     param = dtk.Param(sys.argv[1])
@@ -87,16 +109,18 @@ if __name__ == "__main__":
     steps = param.get_int_list("steps")
     steps_shr = param.get_string_list("steps_shr")
     t0 =time.time()
+    lcs = []
     for step,step_shr in zip(steps,steps_shr):
         t1 = time.time()
         print("\n\n=====================\n STEP: {}".format(step))
         lightcone_step_fname = lightcone_bin_fname.replace("${step}",str(step))
         shear_step_fname = shear_bin_fname.replace("${step}",str(step)).replace("${step_shr}",step_shr)
         lc = load_lightcone(lightcone_step_fname, shear_step_fname)
+        lcs.append(lc)
         ss = load_snapshot(snapshot_galaxy_fname.replace("${step}",str(step)))
         output_fname = lightcone_output_fname.replace("${step}",str(step))
         match_up(lc, ss, output_fname)
         print("\n=== done: {}".format(time.time()-t1))
-
+    #dic_to_hdf5(lightcone_output_fname.replace("${step}","all"),cat_dics(lcs))
     print("\n\n=======================\n=========================")
     print("All done: ",time.time()-t0)
