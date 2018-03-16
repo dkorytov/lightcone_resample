@@ -22,14 +22,14 @@ def load_lightcone(lc_fname,shr_fname):
     lc['vy'] = np.fromfile(lc_fname.replace("${var}","vy"),dtype='f4')
     lc['vz'] = np.fromfile(lc_fname.replace("${var}","vz"),dtype='f4')
     lc['id'] = np.fromfile(lc_fname.replace("${var}","id"),dtype='i8')
-    lc['ra'] = np.fromfile(lc_fname.replace("${var}","phi"),dtype='f4')/3600.0-2.5
-    lc['dec'] = (np.fromfile(lc_fname.replace("${var}","theta"),dtype='f4')/3600.0)-87.5
+    lc['ra'] = np.fromfile(lc_fname.replace("${var}","theta"),dtype='f4')/3600.0-87.5
+    lc['dec'] = (np.fromfile(lc_fname.replace("${var}","phi"),dtype='f4')/3600.0)-2.5
     lc['redshift'] = np.fromfile(lc_fname.replace("${var}","redshift"),dtype='f4')
     lc['lightcone_rotation'] = np.fromfile(lc_fname.replace("${var}","rotation"),dtype='i4')
     lc['lightcone_replication'] = np.fromfile(lc_fname.replace("${var}","replication"),dtype='i4')
     #shear info
-    lc['ra_lensed'] = np.fromfile(shr_fname.replace("${var}","xr2"),dtype='f4')/3600.0
-    lc['dec_lensed'] = np.fromfile(shr_fname.replace("${var}","xr1"),dtype='f4')/3600.0
+    lc['ra_lensed'] = np.fromfile(shr_fname.replace("${var}","xr1"),dtype='f4')/3600.0
+    lc['dec_lensed'] = np.fromfile(shr_fname.replace("${var}","xr2"),dtype='f4')/3600.0
     lc['shear1'] = np.fromfile(shr_fname.replace("${var}","sr1"),dtype='f4')
     lc['shear2'] = np.fromfile(shr_fname.replace("${var}","sr2"),dtype='f4')
     lc['magnification'] = np.fromfile(shr_fname.replace("${var}","mra"),dtype='f4')
