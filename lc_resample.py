@@ -35,8 +35,8 @@ def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     gal_prop['Mag_r']  = mag_r[mask]
     gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
     gal_prop['clr_ri'] = mag_r[mask]-mag_i[mask]
-    gal_prop['Mag_g']  = mag_g[mask]
-    gal_prop['Mag_i']  = mag_i[mask]
+    # gal_prop['Mag_g']  = mag_g[mask]
+    # gal_prop['Mag_i']  = mag_i[mask]
     print(mag_g)
     print(mag_r)
     print(mag_i)
@@ -144,9 +144,14 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     mag_r_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
     mag_i_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
     gal_prop['m_star'] = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
-    gal_prop['Mag_r'] = -2.5*np.log10(mag_g[mask][index] + mag_g_slp[mask][index]*del_a)
+    gal_prop['Mag_r'] = -2.5*np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a)
     gal_prop['clr_gr'] = -2.5*( np.log10(mag_g[mask][index] + mag_g_slp[mask][index]*del_a) - np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) )
     gal_prop['clr_ri'] = -2.5*( np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) - np.log10(mag_i[mask][index] + mag_i_slp[mask][index]*del_a) )
+    
+    #Debug
+    # mag_r = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
+    # lum_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
+    # mag2_r = -2.5*np.log10(
     if verbose:
         print('done loading slope gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
@@ -253,7 +258,7 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
             print("{} isn't copied".format(key))
             continue
-
+   
         print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
         data = h_in_gp[key].value
         if mask is not None:
@@ -336,6 +341,13 @@ def copy_columns_slope(input_fname, input_slope_fname,
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
+        if "SDSS" not in key and "total" not in key and ":rest" not in key and "totalMassStellar" != key:
+            if supershort:
+                continue
+        if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
+            print("{} isn't copied".format(key))
+            continue
+   
         if verbose:
             print('{}/{},{} {} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key,output_fname))
         data = h_in_gp[key].value
@@ -968,7 +980,8 @@ if __name__ == "__main__":
     use_dust_factor = param.get_bool('use_dust_factor')
     dust_factors = param.get_float_list('dust_factors')
     ignore_mstar = param.get_bool('ignore_mstar')
-    selection = galmatcher.read_selections()
+    selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
+    selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
     stepz = dtk.StepZ(200,0,500)
     output_step_list = []
     step_size = steps.size
@@ -986,12 +999,13 @@ if __name__ == "__main__":
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
-        mask = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selection)
+        mask1 = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selections=selection1)
+        mask2 = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selections=selection2)
+        mask = mask1 & mask2
         verbose = True
         lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
         if(use_slope):
             print("Not to be used. We can't trust this method")
-            raise
             print("using slope", step)
             step_a = stepz.get_a(step)
             step2_a = stepz.get_a(step2)
@@ -1005,17 +1019,22 @@ if __name__ == "__main__":
                 slct_lc_abins1 = (abins[k]<lc_a) 
                 slct_lc_abins2 = (lc_a<abins[k+1])
                 slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
-                gal_prop_a, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
-                                                             step_a, abins_avg[k],
-                                                             verbose = verbose,
-                                                             mask=mask)
                 lc_data_a = dic_select(lc_data, slct_lc_abin)
+                if lc_data_a['redshift'].size == 0:
+                    print("\t no galaxies for this redshift bin")
+                    continue #nothing to match for this redshift bin
+                    
+                # gal_prop_a, mask = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask)
+                gal_prop_a, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
+                                                              step_a, abins_avg[k],
+                                                              verbose = verbose,
+                                                              mask=mask)
                 index_abin = resample_index(lc_data_a, gal_prop_a, verbose = verbose)
-                gal_prop_aa, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
-                                                                step_a, lc_a[slct_lc_abin],
-                                                                verbose = verbose,
-                                                                mask=mask,
-                                                                index=index_abin)
+                # gal_prop_aa, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
+                #                                                 step_a, lc_a[slct_lc_abin],
+                #                                                 verbose = verbose,
+                #                                                 mask=mask,
+                #                                                 index=index_abin)
                 index[slct_lc_abin] = index_abin
                 if plot:
                     plot_differences(lc_data_a, gal_prop_a, index_abin)
