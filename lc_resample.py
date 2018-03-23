@@ -154,18 +154,14 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     mag_rnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
     mag_ind_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
     # no dust interpolated values
-    mag_g = -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a) + mag_g_delta*dust_factor
-    mag_r = -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a) + mag_r_delta*dust_factor
-    mag_i = -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a) + mag_i_delta*dust_factor
+    mag_g = -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a)# + mag_g_delta[mask][index]*dust_factor
+    mag_r = -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a)# + mag_r_delta[mask][index]*dust_factor
+    mag_i = -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a)# + mag_i_delta[mask][index]*dust_factor
     m_star = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
     gal_prop['m_star'] = m_star
     gal_prop['Mag_r'] = mag_r
     gal_prop['clr_gr'] = mag_g - mag_r
     gal_prop['clr_ri'] = mag_r - mag_i
-    #Debug
-    # mag_r = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
-    # lum_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    # mag2_r = -2.5*np.log10(
     if verbose:
         print('done loading slope gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
@@ -375,10 +371,11 @@ def copy_columns_slope(input_fname, input_slope_fname,
         if mask is not None:
             data = data[mask]
             slope = slope[mask]
+        no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
         if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
             if ":dustAtlas" in key:
                 # after interpolating on the undusted luminosity, apply the effect of dust
-                new_data = (data[index] + slope[index]*del_a)*dust_effect
+                new_data = (data[index] + slope[index]*del_a)#*dust_effect[index]
             else:
                 new_data = data[index] + slope[index]*del_a
         else:
@@ -648,7 +645,7 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
     print(keys)
     for i,key in enumerate(keys):
         t1 = time.time()
-        print(i,key)
+        print("{}/{} {}".format(i,len(keys),key))
         data_list = []
         #units = None
         for h_gp in hfile_steps_gp:
@@ -1023,7 +1020,6 @@ if __name__ == "__main__":
         verbose = True
         lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
         if(use_slope):
-            print("Not to be used. We can't trust this method")
             print("using slope", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
             step_a = np.min(lc_a)
