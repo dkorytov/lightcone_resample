@@ -252,13 +252,12 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
-        if "SDSS" not in key and "total" not in key and ":rest" not in key and "totalMassStellar" != key:
+        if "SDSS" not in key and "total" not in key and "totalMassStellar" != key:
             if supershort:
                 continue
         if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
             print("{} isn't copied".format(key))
             continue
-   
         print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
         data = h_in_gp[key].value
         if mask is not None:
@@ -1007,14 +1006,16 @@ if __name__ == "__main__":
         if(use_slope):
             print("Not to be used. We can't trust this method")
             print("using slope", step)
-            step_a = stepz.get_a(step)
-            step2_a = stepz.get_a(step2)
+            lc_a = 1.0/(1.0 +lc_data['redshift'])
+            step_a = np.min(lc_a)
+            step2_a = np.max(lc_a)
             abins = np.linspace(step_a, step2_a,substeps+1)
             abins_avg = dtk.bins_avg(abins)
             index = -1*np.ones(lc_data['redshift'].size,dtype='i4')
             for k in range(0,abins_avg.size):
                 print("\t{}/{} substeps".format(k,abins_avg.size))
                 lc_a = 1.0/(1.0 +lc_data['redshift'])
+                lc_a_copy_columns = lc_a
                 h,xbins = np.histogram(lc_a,bins=100)
                 slct_lc_abins1 = (abins[k]<lc_a) 
                 slct_lc_abins2 = (lc_a<abins[k+1])
@@ -1051,7 +1052,7 @@ if __name__ == "__main__":
             print("not assigned: {}/{}: {:.2f}".format( np.sum(slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
             copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
                                output_step_loc, index, 
-                               step_a, lc_data['redshift'],
+                               step_a, lc_a_copy_columns,
                                verbose=verbose, mask=mask, short = short, step = step)
             
         else:
