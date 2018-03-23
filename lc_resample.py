@@ -119,7 +119,7 @@ def cat_dics(dics, keys = None):
     return new_dic
 
 
-def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None):
+def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None, dust_factor = 1.0 ):
     t1 = time.time()
     del_a = target_a - snap_a
     gal_prop = {}
@@ -129,9 +129,18 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     hgp = hfile['galaxyProperties']
     hgp_slp = hfile_slp['galaxyProperties']
     m_star =hgp['totalMassStellar'].value
-    mag_g = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
-    mag_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    mag_i = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
+    # mag with dust (d= dust)
+    mag_gd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
+    mag_rd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
+    mag_id = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
+    # mag witout dust (nd = no dust)
+    mag_gnd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value
+    mag_rnd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
+    mag_ind = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
+    # dust extinction
+    mag_g_delta = mag_gd - mag_gnd
+    mag_r_delta = mag_rd - mag_rnd
+    mag_i_delta = mag_id - mag_ind
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
@@ -140,13 +149,19 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     if index is None:
         index = np.arange(0,np.sum(mask)-1,dtype='i4')
     m_star_slp = hgp_slp['totalMassStellar'].value
-    mag_g_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
-    mag_r_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    mag_i_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
-    gal_prop['m_star'] = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
-    gal_prop['Mag_r'] = -2.5*np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a)
-    gal_prop['clr_gr'] = -2.5*( np.log10(mag_g[mask][index] + mag_g_slp[mask][index]*del_a) - np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) )
-    gal_prop['clr_ri'] = -2.5*( np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) - np.log10(mag_i[mask][index] + mag_i_slp[mask][index]*del_a) )
+    # no dust interpolation slopes
+    mag_gnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value
+    mag_rnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
+    mag_ind_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
+    # no dust interpolated values
+    mag_g = -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a) + mag_g_delta*dust_factor
+    mag_r = -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a) + mag_r_delta*dust_factor
+    mag_i = -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a) + mag_i_delta*dust_factor
+    m_star = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
+    gal_prop['m_star'] = m_star
+    gal_prop['Mag_r'] = mag_r
+    gal_prop['clr_gr'] = mag_g - mag_r
+    gal_prop['clr_ri'] = mag_r - mag_i
     
     #Debug
     # mag_r = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
