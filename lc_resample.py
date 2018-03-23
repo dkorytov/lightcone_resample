@@ -162,7 +162,6 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     gal_prop['Mag_r'] = mag_r
     gal_prop['clr_gr'] = mag_g - mag_r
     gal_prop['clr_ri'] = mag_r - mag_i
-    
     #Debug
     # mag_r = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
     # lum_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
@@ -255,6 +254,8 @@ def get_keys(hgroup):
 
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','placementType','isCentral','hostIndex')
 copy_avoids_ptrn = ('hostHalo','magnitude')
+no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
+no_slope_ptrn  =('morphology','hostHalo','infall')
 
 def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, short = False, step = -1):
     h_in = h5py.File(input_fname,'r')
@@ -284,7 +285,7 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
     return
 
 
-def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose = False,mask = None, short = False, step = -1):
+def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose = False,mask = None, short = False, step = -1, dust_factors = 1.0):
     h_in = h5py.File(input_fname,'r')
     h_out = h5py.File(output_fname,'w')
     h_in_gp = h_in['galaxyProperties']
@@ -332,13 +333,10 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
     return
     
 
-no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble')
-no_slope_ptrn  =('morphology','hostHalo','infall')
-
 def copy_columns_slope(input_fname, input_slope_fname, 
                        output_fname, index,  
                        input_a, lc_a, 
-                       verbose = False, mask = None, short = False, step = -1):
+                       verbose = False, mask = None, short = False, step = -1, dust_factors = 1.0):
     # lc_a = 1.0/(1.0+lc_redshift)
     # input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-input_a
@@ -363,28 +361,34 @@ def copy_columns_slope(input_fname, input_slope_fname,
             continue
    
         if verbose:
-            print('{}/{},{} {} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key,output_fname))
-        data = h_in_gp[key].value
-        slope = h_in_slope_gp[key].value
+            print('{}/{} [{}] {}'.format(i,len(keys),step, key))
+        if ":dustAtlas" in key:
+            key_nd = key.replace(":dustAtlas","")
+            data = h_in_gp[key_nd].value
+            slope = h_in_gp[key_nd].value
+            # multiplicitive effect of dust
+            data_dust = h_in_gp[key].value
+            dust_effect = data_dust/data 
+        else:
+            data = h_in_gp[key].value
+            slope = h_in_slope_gp[key].value
         if mask is not None:
             data = data[mask]
             slope = slope[mask]
-        no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
         if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
-            #print("\tslope")
-            new_data = data[index] + slope[index]*del_a
+            if ":dustAtlas" in key:
+                # after interpolating on the undusted luminosity, apply the effect of dust
+                new_data = (data[index] + slope[index]*del_a)*dust_effect
+            else:
+                new_data = data[index] + slope[index]*del_a
         else:
-            #print("\tno slope")
             new_data = data[index]
-        #TODO Does anything need to stored as double?
         slct_finite = np.isfinite(new_data)
+        #If the data is a double, record it as a float to save on disk space
         if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
             h_out_gp[key]= new_data.astype(np.float32)
         else:
             h_out_gp[key] = new_data
-        #TODO add units
-        #a = h_in_gp[key].attrs['units'].value
-        #h_out_gp[key].attrs['units'] = a
     return
 
 
