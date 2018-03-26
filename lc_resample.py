@@ -466,7 +466,7 @@ def copy_columns_slope_dust(input_fname, input_slope_fname,
         if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
             if ":dustAtlas" in key:
                 # after interpolating on the undusted luminosity, apply the effect of dust
-                new_data = (data[index] + slope[index]*del_a)#*dust_effect[index]
+                new_data = (data[index] + slope[index]*del_a)*dust_effect[index]
             else:
                 new_data = data[index] + slope[index]*del_a
         else:
@@ -1142,8 +1142,6 @@ if __name__ == "__main__":
             index = -1*np.ones(lc_data['redshift'].size,dtype='i4')
             for k in range(0,abins_avg.size):
                 print("\t{}/{} substeps".format(k,abins_avg.size))
-                lc_a = 1.0/(1.0 +lc_data['redshift'])
-                lc_a_copy_columns = lc_a
                 h,xbins = np.histogram(lc_a,bins=100)
                 slct_lc_abins1 = (abins[k]<lc_a) 
                 slct_lc_abins2 = (lc_a<abins[k+1])
@@ -1153,54 +1151,17 @@ if __name__ == "__main__":
                     print("\t no galaxies for this redshift bin")
                     continue #nothing to match for this redshift bin
                     
-                # gal_prop_a, mask = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask)
-                gal_prop_a, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
-                                                              step_a, abins_avg[k],
-                                                              verbose = verbose,
-                                                              mask=mask)
-                gal_prop_ab, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
+                gal_prop_a, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
                                                                      step_a, abins_avg[k],
                                                                      verbose = verbose,
                                                                      mask = mask)
-                plt.figure()
-                h,xbins,ybins = np.histogram2d(gal_prop_a['Mag_r'],gal_prop_ab['Mag_r'],bins=(100,100))
-                plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-                plt.colorbar()
-                plt.grid()
-                plt.xlabel('gal_prop interp');plt.ylabel('gal_prop interp dust')
-                plt.tight_layout()
-                
-                plt.figure()
-                h,xbins,ybins = np.histogram2d(gal_prop_a['clr_ri'],gal_prop_ab['clr_ri'],bins=(100,100))
-                plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-                plt.colorbar()
-                plt.grid()
-                plt.xlabel('interp clr_ri');plt.ylabel('interp dust clr_ri')
-                plt.tight_layout()
-                
-                plt.figure()
-                h,xbins,ybins = np.histogram2d(gal_prop_a['clr_gr'],gal_prop_ab['clr_gr'],bins=(100,100))
-                plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-                plt.colorbar()
-                plt.grid()
-                plt.xlabel('interp clr_gr');plt.ylabel('interp dust clr_gr')
-                plt.tight_layout()
-                
-                plt.show()
-                exit()
                 index_abin = resample_index(lc_data_a, gal_prop_a, verbose = verbose)
-                # gal_prop_aa, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
-                #                                                 step_a, lc_a[slct_lc_abin],
-                #                                                 verbose = verbose,
-                #                                                 mask=mask,
-                #                                                 index=index_abin)
                 
                 
                 index[slct_lc_abin] = index_abin
                 if plot:
                     plot_differences(lc_data_a, gal_prop_a, index_abin)
-                    #plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
-                    #plot_differences_2d(lc_data_a, gal_prop_a, index_abin, x='m_star')
+                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
                     plot_side_by_side(lc_data_a, gal_prop_a, index_abin)
                     mag_bins = (-21,-20,-19)
                     plot_mag_r(lc_data, gal_prop_a, index_abin)
@@ -1212,7 +1173,7 @@ if __name__ == "__main__":
             print("not assigned: {}/{}: {:.2f}".format( np.sum(slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
             copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
                                output_step_loc, index, 
-                               step_a, lc_a_copy_columns,
+                               step_a, lc_a,
                                verbose=verbose, mask=mask, short = short, step = step)
             
         else:
@@ -1281,7 +1242,6 @@ if __name__ == "__main__":
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
         if plot:
-
             dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
             new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
             index = np.arange(lc_data['redshift'].size)
