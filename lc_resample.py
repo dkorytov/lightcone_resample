@@ -119,7 +119,45 @@ def cat_dics(dics, keys = None):
     return new_dic
 
 
-def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None, dust_factor = 1.0 ):
+def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None):
+    t1 = time.time()
+    del_a = target_a - snap_a
+    gal_prop = {}
+    gal_prop_slope = {}
+    hfile = h5py.File(fname,'r')
+    hfile_slp = h5py.File(slope_fname,'r')
+    hgp = hfile['galaxyProperties']
+    hgp_slp = hfile_slp['galaxyProperties']
+    m_star =hgp['totalMassStellar'].value
+    mag_g = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
+    mag_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
+    mag_i = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
+    if mask is None:
+        mask = np.ones(mag_r.size,dtype=bool)
+    if mag_r_cut:
+        #TODO check
+        mask = (mag_r < -10) & mask
+    if index is None:
+        index = np.arange(0,np.sum(mask)-1,dtype='i4')
+    m_star_slp = hgp_slp['totalMassStellar'].value
+    mag_g_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
+    mag_r_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
+    mag_i_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
+    gal_prop['m_star'] = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
+    gal_prop['Mag_r'] = -2.5*np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a)
+    gal_prop['clr_gr'] = -2.5*( np.log10(mag_g[mask][index] + mag_g_slp[mask][index]*del_a) - np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) )
+    gal_prop['clr_ri'] = -2.5*( np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) - np.log10(mag_i[mask][index] + mag_i_slp[mask][index]*del_a) )
+    
+    #Debug
+    # mag_r = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
+    # lum_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
+    # mag2_r = -2.5*np.log10(
+    if verbose:
+        print('done loading slope gal prop. {}'.format(time.time()-t1))
+    return gal_prop,mask
+
+
+def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None, dust_factor = 1.0 ):
     t1 = time.time()
     del_a = target_a - snap_a
     gal_prop = {}
@@ -138,9 +176,9 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     mag_rnd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
     mag_ind = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
     # dust extinction
-    mag_g_delta = mag_gd - mag_gnd
-    mag_r_delta = mag_rd - mag_rnd
-    mag_i_delta = mag_id - mag_ind
+    mag_g_delta = -2.5*np.log10(mag_gd) - -2.5*np.log10(mag_gnd)
+    mag_r_delta = -2.5*np.log10(mag_rd) - -2.5*np.log10(mag_rnd)
+    mag_i_delta = -2.5*np.log10(mag_id) - -2.5*np.log10(mag_ind)
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
@@ -154,9 +192,9 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     mag_rnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
     mag_ind_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
     # no dust interpolated values
-    mag_g = -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a)# + mag_g_delta[mask][index]*dust_factor
-    mag_r = -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a)# + mag_r_delta[mask][index]*dust_factor
-    mag_i = -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a)# + mag_i_delta[mask][index]*dust_factor
+    mag_g = -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a) + mag_g_delta[mask][index]*dust_factor
+    mag_r = -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a) + mag_r_delta[mask][index]*dust_factor
+    mag_i = -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a) + mag_i_delta[mask][index]*dust_factor
     m_star = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
     gal_prop['m_star'] = m_star
     gal_prop['Mag_r'] = mag_r
@@ -330,6 +368,59 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
     
 
 def copy_columns_slope(input_fname, input_slope_fname, 
+                       output_fname, index,  
+                       input_a, lc_a, 
+                       verbose = False, mask = None, short = False, step = -1):
+    # lc_a = 1.0/(1.0+lc_redshift)
+    # input_a = 1.0/(1.0 + input_redshift)
+    del_a = lc_a-input_a
+    h_in = h5py.File(input_fname,'r')
+    h_in_slope = h5py.File(input_slope_fname,'r')
+    h_out = h5py.File(output_fname,'w')
+    h_in_gp = h_in['galaxyProperties']
+    h_in_slope_gp = h_in_slope['galaxyProperties']
+    h_out_gp = h_out.create_group('galaxyProperties')
+    keys = get_keys(h_in_gp)
+    max_float = np.finfo(np.float32).max #The max float size
+    for i in range(0,len(keys)):
+        key = keys[i]
+        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
+            if short:
+                continue
+        if "SDSS" not in key and "total" not in key and ":rest" not in key and "totalMassStellar" != key:
+            if supershort:
+                continue
+        if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
+            print("{} isn't copied".format(key))
+            continue
+   
+        if verbose:
+            print('{}/{},{} {} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key,output_fname))
+        data = h_in_gp[key].value
+        slope = h_in_slope_gp[key].value
+        if mask is not None:
+            data = data[mask]
+            slope = slope[mask]
+        no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
+        if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
+            #print("\tslope")
+            new_data = data[index] + slope[index]*del_a
+        else:
+            #print("\tno slope")
+            new_data = data[index]
+        #TODO Does anything need to stored as double?
+        slct_finite = np.isfinite(new_data)
+        if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
+            h_out_gp[key]= new_data.astype(np.float32)
+        else:
+            h_out_gp[key] = new_data
+        #TODO add units
+        #a = h_in_gp[key].attrs['units'].value
+        #h_out_gp[key].attrs['units'] = a
+    return
+
+
+def copy_columns_slope_dust(input_fname, input_slope_fname, 
                        output_fname, index,  
                        input_a, lc_a, 
                        verbose = False, mask = None, short = False, step = -1, dust_factors = 1.0):
@@ -976,6 +1067,28 @@ def plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins):
         ax[i].grid()
 
 
+def plot_clr_z(lc_data, gal_prop, index,clr='clr_gr'):
+    fig,axs = plt.subplots(1,3,sharey=True,sharex=True,figsize=(15,5))
+    h,xbins,ybins = np.histogram2d(lc_data['redshift'],lc_data[clr],bins=(100,100))
+    axs[0].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    axs[0].grid()
+    axs[0].set_title('UMachine + SDSS')
+    axs[0].set_xlabel('redshift')
+    axs[0].set_ylabel(key)
+    h,xbins,ybins = np.histogram2d(gal_prop['redshift'][index],gal_prop[clr][index],bins=(xbins,ybins))
+    axs[1].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    axs[1].grid()
+    axs[1].set_title('Matched Galacticus')
+    axs[1].set_xlabel('redshift')
+    axs[1].set_ylabel(key)
+    h,xbins,ybins = np.histogram2d(gal_prop['redshift'],gal_prop[clr],bins=(xbins,ybins))
+    axs[2].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    axs[2].grid()
+    axs[2].set_title('Galacticus ')
+    axs[2].set_xlabel('redshift')
+    axs[2].set_ylabel(key)
+    
+
 if __name__ == "__main__":
     param = dtk.Param(sys.argv[1])
     lightcone_fname = param.get_string('lightcone_fname')
@@ -1045,12 +1158,44 @@ if __name__ == "__main__":
                                                               step_a, abins_avg[k],
                                                               verbose = verbose,
                                                               mask=mask)
+                gal_prop_ab, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
+                                                                     step_a, abins_avg[k],
+                                                                     verbose = verbose,
+                                                                     mask = mask)
+                plt.figure()
+                h,xbins,ybins = np.histogram2d(gal_prop_a['Mag_r'],gal_prop_ab['Mag_r'],bins=(100,100))
+                plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+                plt.colorbar()
+                plt.grid()
+                plt.xlabel('gal_prop interp');plt.ylabel('gal_prop interp dust')
+                plt.tight_layout()
+                
+                plt.figure()
+                h,xbins,ybins = np.histogram2d(gal_prop_a['clr_ri'],gal_prop_ab['clr_ri'],bins=(100,100))
+                plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+                plt.colorbar()
+                plt.grid()
+                plt.xlabel('interp clr_ri');plt.ylabel('interp dust clr_ri')
+                plt.tight_layout()
+                
+                plt.figure()
+                h,xbins,ybins = np.histogram2d(gal_prop_a['clr_gr'],gal_prop_ab['clr_gr'],bins=(100,100))
+                plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+                plt.colorbar()
+                plt.grid()
+                plt.xlabel('interp clr_gr');plt.ylabel('interp dust clr_gr')
+                plt.tight_layout()
+                
+                plt.show()
+                exit()
                 index_abin = resample_index(lc_data_a, gal_prop_a, verbose = verbose)
                 # gal_prop_aa, mask = construct_gal_prop_redshift(gltcs_step_fname, gltcs_slope_step_fname,
                 #                                                 step_a, lc_a[slct_lc_abin],
                 #                                                 verbose = verbose,
                 #                                                 mask=mask,
                 #                                                 index=index_abin)
+                
+                
                 index[slct_lc_abin] = index_abin
                 if plot:
                     plot_differences(lc_data_a, gal_prop_a, index_abin)
@@ -1149,7 +1294,7 @@ if __name__ == "__main__":
             
             plt.figure()
             plt.title(" org gal prop vs new gal prop")
-            plt.plot(gal_prop['m_star'][index], new_gal_prop['m_star'],'.',alpha=0.3)
+            plt.plot(new_gal_prop['m_star'][index], new_gal_prop['m_star'],'.',alpha=0.3)
             plot_mag_r(lc_data, new_gal_prop, index)
             plot_side_by_side(lc_data, new_gal_prop, index)
             plot_clr_mag(lc_data, new_gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
