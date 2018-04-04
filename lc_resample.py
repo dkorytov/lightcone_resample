@@ -200,6 +200,7 @@ def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=F
     gal_prop['Mag_r'] = mag_r
     gal_prop['clr_gr'] = mag_g - mag_r
     gal_prop['clr_ri'] = mag_r - mag_i
+    gal_prop['dust_factor'] = np.ones(m_star.size,dtype='f4')*dust_factor
     if verbose:
         print('done loading slope gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
@@ -408,15 +409,11 @@ def copy_columns_slope(input_fname, input_slope_fname,
         else:
             #print("\tno slope")
             new_data = data[index]
-        #TODO Does anything need to stored as double?
         slct_finite = np.isfinite(new_data)
         if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
             h_out_gp[key]= new_data.astype(np.float32)
         else:
             h_out_gp[key] = new_data
-        #TODO add units
-        #a = h_in_gp[key].attrs['units'].value
-        #h_out_gp[key].attrs['units'] = a
     return
 
 
@@ -427,6 +424,7 @@ def copy_columns_slope_dust(input_fname, input_slope_fname,
     # lc_a = 1.0/(1.0+lc_redshift)
     # input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-input_a
+    print("del_a: ", del_a)
     h_in = h5py.File(input_fname,'r')
     h_in_slope = h5py.File(input_slope_fname,'r')
     h_out = h5py.File(output_fname,'w')
@@ -450,9 +448,10 @@ def copy_columns_slope_dust(input_fname, input_slope_fname,
         if verbose:
             print('{}/{} [{}] {}'.format(i,len(keys),step, key))
         if ":dustAtlas" in key:
+            print("\thas dust")
             key_nd = key.replace(":dustAtlas","")
             data = h_in_gp[key_nd].value
-            slope = h_in_gp[key_nd].value
+            slope = h_in_slope_gp[key_nd].value
             # multiplicitive effect of dust
             data_dust = h_in_gp[key].value
             dust_effect = data_dust/data 
@@ -464,10 +463,13 @@ def copy_columns_slope_dust(input_fname, input_slope_fname,
             slope = slope[mask]
         no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
         if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
+            print("\t float & slope")
             if ":dustAtlas" in key:
+                print("\t\t has dustAtlas")
                 # after interpolating on the undusted luminosity, apply the effect of dust
-                new_data = (data[index] + slope[index]*del_a)*dust_effect[index]
+                new_data = (data[index] + slope[index]*del_a)*dust_effect[index]*dust_factors
             else:
+                print("\t\t does not have dustAtlas")
                 new_data = data[index] + slope[index]*del_a
         else:
             new_data = data[index]
@@ -1140,6 +1142,7 @@ if __name__ == "__main__":
             abins = np.linspace(step_a, step2_a,substeps+1)
             abins_avg = dtk.bins_avg(abins)
             index = -1*np.ones(lc_data['redshift'].size,dtype='i4')
+            match_dust_factors = -1*np.ones(lc_data['redshift'].size,dtype='i4')
             for k in range(0,abins_avg.size):
                 print("\t{}/{} substeps".format(k,abins_avg.size))
                 h,xbins = np.histogram(lc_a,bins=100)
@@ -1150,15 +1153,36 @@ if __name__ == "__main__":
                 if lc_data_a['redshift'].size == 0:
                     print("\t no galaxies for this redshift bin")
                     continue #nothing to match for this redshift bin
-                    
-                gal_prop_a, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
-                                                                     step_a, abins_avg[k],
-                                                                     verbose = verbose,
-                                                                     mask = mask)
+                if use_dust_factor:
+                    gal_prop_list = [] 
+                    for dust_factor in np.concatenate(([1.0],dust_factors)):
+                        print("dust_factor********=",dust_factor)
+                        gal_prop_tmp,_ = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
+                                                                                 step_a, abins_avg[k],
+                                                                                 verbose = verbose,
+                                                                                 mask = mask,
+                                                                                 dust_factor=dust_factor)
+                        gal_prop_list.append(gal_prop_tmp)
+                    gal_prop_a = cat_dics(gal_prop_list)
+                else:
+                    gal_prop_a, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
+                                                                        step_a, abins_avg[k],
+                                                                        verbose = verbose,
+                                                                        mask = mask)
+                # Find the closest Galacticus galaxy
                 index_abin = resample_index(lc_data_a, gal_prop_a, verbose = verbose)
-                
-                
-                index[slct_lc_abin] = index_abin
+                if use_dust_factor:
+                    # Get the Galacticus galaxy index, the division is to correctly
+                    # offset the index for the extra dust gal_prop 
+                    index[slct_lc_abin] = index_abin//(1+len(dust_factors))
+                    # Record the dust factor for the matched galaxy so that it can be applied 
+                    # to other columns in copy_columns()
+                    match_dust_factors[slct_lc_abin] = gal_prop_a['dust_factor'][index_abin]
+                else:
+                    # record the Galacticus galaxy index, 
+                    index[slct_lc_abin] = index_abin
+                    # all matches have 1.0 dust factor since aren't applying extra dust factors
+                    match_dust_factors[slct_lc_abin] = 1.0
                 if plot:
                     plot_differences(lc_data_a, gal_prop_a, index_abin)
                     plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
@@ -1170,11 +1194,19 @@ if __name__ == "__main__":
                     plot_ri_gr_mag(lc_data, gal_prop_a, index_abin, mag_bins)
                     plt.show()
             slct_neg = index == -1
+            print(match_dust_factors)
             print("not assigned: {}/{}: {:.2f}".format( np.sum(slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
-            copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
-                               output_step_loc, index, 
-                               step_a, lc_a,
-                               verbose=verbose, mask=mask, short = short, step = step)
+            if use_dust_factor: 
+                copy_columns_slope_dust(gltcs_step_fname, gltcs_slope_step_fname, 
+                                        output_step_loc, index, 
+                                        step_a, lc_a,
+                                        verbose=verbose, mask=mask, short = short, step = step,
+                                        dust_factors = match_dust_factors)
+            else:
+                copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
+                                   output_step_loc, index, 
+                                   step_a, lc_a,
+                                   verbose=verbose, mask=mask, short = short, step = step)
             
         else:
             print("using no slope", step)

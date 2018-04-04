@@ -108,6 +108,8 @@ if __name__ == "__main__":
     protoDC2 = load_protoDC2(output_fname.replace("${step}","all"))
     bins = np.linspace(-.5,2,250)
     zbins = np.linspace(0,1,250)
+    magobsbins = np.linspace(14,39,100)
+    magrestbins = np.linspace(-30,-12,100)
     plt.figure()
     h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag r rest'],bins=(zbins,bins))
     plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
@@ -164,7 +166,7 @@ if __name__ == "__main__":
     plt.grid()
 
     plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag i obs'],bins=(100,100))
+    h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag i obs'],bins=(zbins,magobsbins))
     plt.pcolor(xbins,ybins,h.T,cmap="PuBu",norm=clr.LogNorm())
     plt.colorbar()
     plt.plot([0,1],[25.3,25.3],'r',label='gold sample')
