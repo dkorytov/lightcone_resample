@@ -722,7 +722,15 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     hgroup['hostHaloEigenVectorReduced3Z'] = eg_cat_eg3_z
     return
 
-    
+   
+def add_native_umachine(output_fname, umachine_native):
+    h_in = h5py.File(umachine_native,'r')
+    hgroup = h5py.File(output_fname, 'r+')['galaxyProperties/UMachineNative']
+    for key in h_in.keys():
+        hgroup[key] = h_in[key]
+    return
+ 
+
 def combine_step_lc_into_one(step_fname_list, out_fname):
     print("combining into one file")
     hfile_out = h5py.File(out_fname,'w')
@@ -1273,6 +1281,7 @@ if __name__ == "__main__":
    
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
+        add_native_umachine(output_step_loc, lc_data)
         if plot:
             dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
             new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
