@@ -43,7 +43,6 @@ def load_protoDC2(fname):
     result['mag i obs'] = mag_g
     result['g-r obs'] = mag_g - mag_r
     result['r-i obs'] = mag_r - mag_i
-
     result['redshift'] = redshift
     print "\n\ttime: ",time.time() - t1
     return result
@@ -100,7 +99,7 @@ if __name__ == "__main__":
     plt.figure()
     h,xbins,ybins = np.histogram2d(lc_data['g-r'],lc_data['r-i'],bins=(clrclrbins,clrclrbins))
     plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('g-r'); plt.xlabel('r-i')
+    plt.xlabel('g-r rest'); plt.ylabel('r-i rest')
     plt.title("UMachine+SDSS Light Cone")
     plt.grid()
 
