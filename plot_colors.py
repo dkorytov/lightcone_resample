@@ -164,6 +164,15 @@ if __name__ == "__main__":
     plt.title("ProtoDC2 v3")
     plt.grid()
 
+
+    plt.figure()
+    h,xbins,ybins = np.histogram2d(protoDC2['mag r rest'], protoDC2['g-r rest'],bins=(magrestbins,clrclrbins))
+    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    plt.xlabel('r rest'); plt.ylabel('g-r rest')
+    plt.title("ProtoDC2 v3")
+    plt.grid()
+
+
     plt.figure()
     h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag i obs'],bins=(zbins,magobsbins))
     plt.pcolor(xbins,ybins,h.T,cmap="PuBu",norm=clr.LogNorm())

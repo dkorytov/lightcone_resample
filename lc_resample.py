@@ -14,7 +14,11 @@ from astropy.table import Table
 from scipy.spatial import cKDTree
 from pecZ import pecZ
 from astropy.cosmology import WMAP7 as cosmo
-from scipy.interpolate import interp1d 
+from scipy.integrate import cumtrapz
+from scipy.interpolate import interp1d
+from cosmodc2.black_hole_modeling import monte_carlo_bh_acc_rate, bh_mass_from_bulge_mass, monte_carlo_black_hole_mass
+from cosmodc2.size_modeling import mc_size_vs_luminosity_late_type, mc_size_vs_luminosity_early_type
+
 import galmatcher
 
 def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
@@ -220,6 +224,7 @@ def construct_lc_data(fname,verbose = False):
     lc_data['clr_gr'] = hfile['restframe_extincted_sdss_gr'].value
     lc_data['clr_ri'] = hfile['restframe_extincted_sdss_ri'].value
     lc_data['redshift'] = hfile['redshift'].value
+    lc_data['sfr_percentile'] = hfile['sfr_percentile'].value
     if verbose:
         print('done loading lc data. {}'.format(time.time()-t1))
     return lc_data
@@ -287,8 +292,10 @@ def get_keys(hgroup):
     return keys
 
 
-copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','placementType','isCentral','hostIndex')
-copy_avoids_ptrn = ('hostHalo','magnitude')
+copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
+               'redshiftHubble','placementType','isCentral','hostIndex', 
+               'blackHoleAccretionRate','blackHoleMass')
+copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle')
 no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
@@ -435,7 +442,7 @@ def copy_columns_slope_dust(input_fname, input_slope_fname,
     max_float = np.finfo(np.float32).max #The max float size
     for i in range(0,len(keys)):
         key = keys[i]
-        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
+        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key:
             if short:
                 continue
         if "SDSS" not in key and "total" not in key and ":rest" not in key and "totalMassStellar" != key:
@@ -575,6 +582,8 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
     h_out_gp['isCentral'] = central
     h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value
     h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value
+    unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
+    h_out_gp['NumberSelected'] = cnt[indx]
     tf = time.time()
     if verbose:
         print("\tDone overwrite columns", tf-t1)
@@ -725,11 +734,93 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
    
 def add_native_umachine(output_fname, umachine_native):
     h_in = h5py.File(umachine_native,'r')
-    hgroup = h5py.File(output_fname, 'r+')['galaxyProperties/UMachineNative']
+    hgroup = h5py.File(output_fname, 'r+')['galaxyProperties']
     for key in h_in.keys():
-        hgroup[key] = h_in[key]
+        print(key)
+        hgroup['UMachineNative/'+key] = h_in[key].value
     return
  
+
+def add_blackhole_quantities(output_fname, redshift, percentile_sfr):
+    hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
+    print(hgroup.keys())
+    bhm = monte_carlo_black_hole_mass(hgroup['spheroidMassStellar'].value)
+    eddington_ratio, bh_acc_rate = monte_carlo_bh_acc_rate(redshift, bhm, percentile_sfr)
+    hgroup['blackHoleMass'] = bhm
+    hgroup['blackHoleAccretionRate'] = bh_acc_rate*1e9
+    hgroup['blackHoleEddingtonRatio'] = eddington_ratio
+
+
+def add_size_quantities(output_fname):
+    hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
+    mag_r = hgroup['SDSS_filters/magnitude:SDSS_r:rest'].value
+    redshift = hgroup['redshift'].value
+    arcsec_per_kpc = interp1d(redshift,cosmo.arcsec_per_kpc_proper(redshift).value)
+    size_disk = mc_size_vs_luminosity_late_type(mag_r, redshift)
+    size_sphere = mc_size_vs_luminosity_early_type(mag_r, redshift)
+    f = arcsec_per_kpc(redshift)
+    hgroup['morphology/spheroidHalfLightRadius'] =       size_sphere
+    hgroup['morphology/spheroidHalfLightRadiusArcsec'] = size_sphere*f
+    hgroup['morphology/diskHalfLightRadius'] =       size_disk
+    hgroup['morphology/diskHalfLightRadiusArcsec'] = size_disk*f
+
+
+def add_ellipticity_quantities(output_fname):
+    def gal_zoo_dist(x):
+        val = np.zeros_like(x)
+        a = 2
+        slct = x<0.2
+        val[slct] = 0
+        
+        slct = (0.1<=x) & (x<0.7)
+        val[slct] = np.tanh((x[slct]-.3)*np.pi*a) - np.tanh((-0.2)*np.pi*a)
+        
+        slct = (0.7<=x) & (x<1.0)
+        val[slct] = np.tanh(-(x[slct]-.95)*np.pi*6.) - np.tanh((-0.2)*np.pi*a) -(np.tanh(-(0.7-0.95)*np.pi*6)-np.tanh(0.4*np.pi*a))
+        
+        slct = 1.0<=x
+        val[slct] = 0
+        return val
+    hgroup = h5py.File(output_fname, 'r+')['galaxyProperties']
+    inclination = hgroup['morphology/inclination'].value
+    del hgroup['morphology/inclination']
+    size = np.size(inclination)
+    pos_angle = np.random.uniform(size=size)*np.pi
+
+    spheroid_axis_ratio = dtk.clipped_gaussian(0.8, 0.2, size, max_val = 1.0, min_val=0.0)
+    dist,lim = dtk.make_distribution(-inclination)
+    resamp = dtk.resample_distribution(dist,gal_zoo_dist,lim,[0.0,1.0])
+
+
+    ellip_spheroid = (1.0 - spheroid_axis_ratio)/(1.0 + spheroid_axis_ratio)
+
+    hgroup['morphology/spheroidAxisRatio'] = spheroid_axis_ratio
+    hgroup['morphology/spheroidMajorAxisArcsec'] = hgroup['morphology/spheroidHalfLightRadiusArcsec'].value
+    hgroup['morphology/spheroidMinorAxisArcsec'] = hgroup['morphology/spheroidHalfLightRadiusArcsec'].value*spheroid_axis_ratio
+    hgroup['morphology/spheroidEllipticity'] = ellip_spheroid
+    hgroup['morphology/spheroidEllipticity1'] = np.cos(2.0*pos_angle)*ellip_spheroid
+    hgroup['morphology/spheroidEllipticity2'] = np.sin(2.0*pos_angle)*ellip_spheroid
+
+    disk_axis_ratio = resamp(-inclination)
+    ellip_disk = (1.0 - disk_axis_ratio)/(1.0 + disk_axis_ratio)
+    hgroup['morphology/diskAxisRatio'] = disk_axis_ratio
+    hgroup['morphology/diskMajorAxisArcsec'] = hgroup['morphology/diskHalfLightRadiusArcsec'].value
+    hgroup['morphology/diskMinorAxisArcsec'] = hgroup['morphology/diskHalfLightRadiusArcsec'].value*disk_axis_ratio
+    hgroup['morphology/diskEllipticity'] = ellip_disk
+    hgroup['morphology/diskEllipticity1'] = np.cos(2.0*pos_angle)*ellip_disk
+    hgroup['morphology/diskEllipticity2'] = np.sin(2.0*pos_angle)*ellip_disk
+
+    lum_disk = hgroup['SDSS_filters/diskLuminositiesStellar:SDSS_r:rest'].value
+    lum_sphere = hgroup['SDSS_filters/spheroidLuminositiesStellar:SDSS_r:rest'].value
+    lum_tot = lum_disk + lum_sphere
+    tot_ellip =  (lum_disk*ellip_disk + lum_sphere*ellip_spheroid)/(lum_tot)
+    hgroup['morphology/totalEllipticity']  = tot_ellip
+    hgroup['morphology/totalAxisRatio']    = (1.0 - tot_ellip)/(1.0 + tot_ellip)
+    hgroup['morphology/totalEllipticity1'] = np.cos(2.0*pos_angle)*tot_ellip
+    hgroup['morphology/totalEllipticity2'] = np.sin(2.0*pos_angle)*tot_ellip
+    
+    hgroup['morphology/positionAngle'] = pos_angle*180.0/np.pi
+
 
 def combine_step_lc_into_one(step_fname_list, out_fname):
     print("combining into one file")
@@ -743,7 +834,6 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
         hfile_steps.append(hfile)
         hfile_steps_gp.append(gp)
     keys = get_keys(hfile_steps_gp[0])
-    print(keys)
     for i,key in enumerate(keys):
         t1 = time.time()
         print("{}/{} {}".format(i,len(keys),key))
@@ -756,10 +846,11 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
         hfile_gp_out[key]=data
         #hfile_gp_out[key].attrs['units']=units
         print("\t time: {:.2f}".format(time.time()-t1))
+    hfile_gp_out['galaxyID'] = np.arange(hfile_gp_out['redshift'].size,dtype='i8')
     return 
 
 
-def add_metadata(gal_ref_fname, out_fname):
+def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version_minor_minor):
     """
     Takes the metadata group and copies it over the final output product. 
     Also for each data column, copies the units attribute. 
@@ -779,8 +870,21 @@ def add_metadata(gal_ref_fname, out_fname):
     # for key in keys_b:
     #     hfile_out['galaxyProperties'][key].attrs['units'] = hfile_gf['galaxyProperties'][key].attrs['units']
     # #copy over metadata
+    del hfile_out['/metaData']
     hfile_out.copy(hfile_gf['metaData'],'metaData')
     del hfile_out['/metaData/catalogCreationDate']
+    del hfile_out['/metaData/versionChangeNotes']
+    del hfile_out['/metaData/versionMajor'] 
+    del hfile_out['/metaData/versionMinor'] 
+    del hfile_out['/metaData/versionMinorMinor'] 
+    del hfile_out['/metaData/version'] 
+    # del hgroup['versionChangeNotes']
+
+    hfile_out['versionMajor'] = version_major
+    hfile_out['versionMinor'] = version_minor
+    hfile_out['versionMinorMinor'] = version_minor_minor
+    hfile_out['version'] = "{}.{}.{}".format(version_major, version_minor, version_minor_minor)
+
     hfile_out['/metaData/catalogCreationDate']=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
 
@@ -795,7 +899,7 @@ def add_units(out_fname):
     deg_list = ['ra','dec','positionAngle','inclination']; deg_unit = 'degrees'
     phys_kpc_list = ['Radius']; phys_kpc_unit = 'physical kpc'
     phys_mpc_list = []; phys_mpc_unit = 'physical Mpc'
-    reduced_dist_list =['Reduced','EigenVector'];reduced_dist_unit = 'unitless'
+    reduced_dist_list =['Reduced','EigenVector', 'Eddington'];reduced_dist_unit = 'unitless'
     eigen_val_list = ['EigenValue'];eigen_val_unit = 'comoving Mpc/h'
     comv_mpc_list = ['x','y','z']; comv_mpc_unit = 'comoving Mpc/h'
     vel_list = ['vx','vy','vz','Velocity']; vel_unit = 'km/s'
@@ -810,6 +914,8 @@ def add_units(out_fname):
     bool_list =['nodeIsIsolated'];bool_unit = 'boolean'
     spinSpin_list =['spinSpin'];spinSpin_unit ='lambda'
     step_list = ['step'];step_unit = 'simluation step'
+    umachine_list = ['UMachineNative'];umachine_unit = 'Unspecified'
+    count_list =['NumberSelected'];count_unit = 'count'
     print("assigning units")
     keys = get_keys(hfile)
     print( keys)
@@ -819,6 +925,9 @@ def add_units(out_fname):
         if(any(l in key for l in mag_list)):
             hfile[key].attrs['units']=mag_unit
             print("\t mag")
+            # umachine list
+        elif(any(l in key for l in umachine_list)):
+            hfile[key].attrs['units']=umachine_unit
             #add arcsec units
         elif(any(l in key for l in arcsec_list)):
             hfile[key].attrs['units']=arcsec_unit
@@ -894,9 +1003,12 @@ def add_units(out_fname):
             #spinSpin
         elif(any(l in key for l in spinSpin_list)):
             hfile[key].attrs['units']=spinSpin_unit
-            #step
+            # step
         elif(any(l in key for l in step_list)):
             hfile[key].attrs['units']=step_unit
+            #counts
+        elif(any(l in key for l in count_list)):
+            hfile[key].attrs['units']=count_unit
             #Everything should have a unit!
         else:
             print("column", key, "was not assigned a unit :(")
@@ -904,7 +1016,7 @@ def add_units(out_fname):
 
 
 def plot_differences(lc_data, gal_prop, index):
-    keys = gal_prop.keys()
+    keys = ['Mag_r','clr_gr','clr_ri','m_star']
     dist = {}
     dist_all = None
     for key in keys:
@@ -939,7 +1051,7 @@ def plot_differences(lc_data, gal_prop, index):
 
 
 def plot_differences_2d(lc_data, gal_prop,index, x='Mag_r'):
-    keys = gal_prop.keys()
+    keys = ['Mag_r','clr_gr','clr_ri','m_star']
     for key in keys:
         # if key == x:
         #     continue
@@ -1118,6 +1230,9 @@ if __name__ == "__main__":
     use_dust_factor = param.get_bool('use_dust_factor')
     dust_factors = param.get_float_list('dust_factors')
     ignore_mstar = param.get_bool('ignore_mstar')
+    version_major = param.get_int('version_major')
+    version_minor = param.get_int('version_minor')
+    version_minor_minor = param.get_int('version_minor_minor')
     selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
     selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
     stepz = dtk.StepZ(200,0,500)
@@ -1145,8 +1260,8 @@ if __name__ == "__main__":
         if(use_slope):
             print("using slope", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
-            step_a = np.min(lc_a)
-            step2_a = np.max(lc_a)
+            step_a = np.min(lc_a)*0.99 #so no galaxy is exactly on the egdge of the bins
+            step2_a = np.max(lc_a)*1.01
             abins = np.linspace(step_a, step2_a,substeps+1)
             abins_avg = dtk.bins_avg(abins)
             index = -1*np.ones(lc_data['redshift'].size,dtype='i4')
@@ -1204,6 +1319,7 @@ if __name__ == "__main__":
             slct_neg = index == -1
             print(match_dust_factors)
             print("not assigned: {}/{}: {:.2f}".format( np.sum(slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
+            assert(np.sum(slct_neg) == 0)
             if use_dust_factor: 
                 copy_columns_slope_dust(gltcs_step_fname, gltcs_slope_step_fname, 
                                         output_step_loc, index, 
@@ -1281,7 +1397,10 @@ if __name__ == "__main__":
    
         overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
-        add_native_umachine(output_step_loc, lc_data)
+        add_native_umachine(output_step_loc, lightcone_step_fname)
+        add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
+        add_size_quantities(output_step_loc)
+        add_ellipticity_quantities(output_step_loc)
         if plot:
             dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
             new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
@@ -1306,5 +1425,5 @@ if __name__ == "__main__":
         print("\n=====\ndone. {}".format(time.time()-t0))
     output_all = output_fname.replace("${step}","all")
     combine_step_lc_into_one(output_step_list, output_all)
-    add_metadata(gltcs_metadata_ref, output_all)
+    add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor)
     
