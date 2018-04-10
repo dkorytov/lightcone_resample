@@ -33,12 +33,12 @@ def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
-        #TODO check
         mask = (mag_r < -10) & mask
     gal_prop['m_star'] = m_star[mask]
     gal_prop['Mag_r']  = mag_r[mask]
     gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
     gal_prop['clr_ri'] = mag_r[mask]-mag_i[mask]
+
     # gal_prop['Mag_g']  = mag_g[mask]
     # gal_prop['Mag_i']  = mag_i[mask]
     print(mag_g)
@@ -84,7 +84,6 @@ def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = Non
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
-        #TODO check
         mask = (mag_r < -10) & mask
     gal_prop['m_star'] = m_star[mask]
     gal_prop['Mag_r']  = mag_r[mask]
@@ -139,7 +138,6 @@ def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
-        #TODO check
         mask = (mag_r < -10) & mask
     if index is None:
         index = np.arange(0,np.sum(mask)-1,dtype='i4')
@@ -186,7 +184,6 @@ def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=F
     if mask is None:
         mask = np.ones(mag_r.size,dtype=bool)
     if mag_r_cut:
-        #TODO check
         mask = (mag_r < -10) & mask
     if index is None:
         index = np.arange(0,np.sum(mask)-1,dtype='i4')
@@ -321,9 +318,6 @@ def copy_columns(input_fname, output_fname, index, verbose = False,mask = None, 
         if mask is not None:
             data = data[mask]
         h_out_gp[key]=data[index]
-        #TODO add units
-        #a = h_in_gp[key].attrs['units'].value
-        #h_out_gp[key].attrs['units'] = a
     return
 
 
@@ -369,9 +363,6 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, verbose
             data = data[raw_index]
         h_out_gp[key]=data
         print("\n\ttime: {}".format(time.time()-t1))
-        #TODO add units
-        #a = h_in_gp[key].attrs['units'].value
-        #h_out_gp[key].attrs['units'] = a
     return
     
 
@@ -565,11 +556,6 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
     #redshift
     h_out_gp['redshift'] = z_obs
     h_out_gp['redshiftHubble'] = redshift
-    #TODO
-    #metadata
-    #galaxyID
-    h_out_gp['galaxyID']=h_in['lightcone_id'].value
-
     h_out_gp['ra_true'] = h_in['ra'].value
     h_out_gp['dec_true'] = h_in['dec'].value
     h_out_gp['ra'] = h_in['ra_lensed'].value
