@@ -890,10 +890,10 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
     del hfile_out['/metaData/version'] 
     # del hgroup['versionChangeNotes']
 
-    hfile_out['versionMajor'] = version_major
-    hfile_out['versionMinor'] = version_minor
-    hfile_out['versionMinorMinor'] = version_minor_minor
-    hfile_out['version'] = "{}.{}.{}".format(version_major, version_minor, version_minor_minor)
+    hfile_out['/metaData/versionMajor'] = version_major
+    hfile_out['/metaData/versionMinor'] = version_minor
+    hfile_out['/metaData/versionMinorMinor'] = version_minor_minor
+    hfile_out['/metaData/version'] = "{}.{}.{}".format(version_major, version_minor, version_minor_minor)
 
     hfile_out['/metaData/catalogCreationDate']=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
