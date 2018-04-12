@@ -339,7 +339,7 @@ def copy_columns(input_fname, output_fname, index,
 
 
 def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, 
-                      verbose = False,mask = None, 
+                      verbose = False,mask = None,
                       short = False, supershort = False, step = -1, dust_factors = 1.0):
     h_in = h5py.File(input_fname,'r')
     h_out = h5py.File(output_fname,'w')
@@ -353,7 +353,7 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor,
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
-        if "SDSS" not in key and "total" not in key and ":rest" not in key and "MassStellar" not in key and 'infallIndex' != key:
+        if "SDSS" not in key and "total" not in key and ":rest" not in key and "MassStellar" not in key and "infallIndex" != key:
             if supershort:
                 continue
         if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
@@ -388,7 +388,7 @@ def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor,
 def copy_columns_slope(input_fname, input_slope_fname, 
                        output_fname, index,  
                        input_a, lc_a, 
-                       verbose = False, mask = None, 
+                       verbose = False, mask = None,
                        short = False, supershort = False, step = -1):
     # lc_a = 1.0/(1.0+lc_redshift)
     # input_a = 1.0/(1.0 + input_redshift)
@@ -406,7 +406,7 @@ def copy_columns_slope(input_fname, input_slope_fname,
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
             if short:
                 continue
-        if "SDSS" not in key and "total" not in key and ":rest" not in key and "MassStellar" not in key and "infallIndex" != key:
+        if "SDSS" not in key and "total" not in key and ":rest" not in key and "MassStellar" not in key and 'infallIndex' != key:
             if supershort:
                 continue
         if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
