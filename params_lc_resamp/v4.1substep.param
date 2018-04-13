@@ -11,6 +11,7 @@ output_fname  /cosmo/homes/dkorytov/data/cosmoDC2/protoDC2_v4/v4/v4.1substep.${s
 
 use_slope true
 substeps  1
+use_substep_redshift false
 short     false
 supershort false
 
@@ -20,6 +21,7 @@ dust_factors 3.0 6.0
 ignore_mstar false
 
 plot      false
+plot_substep  true
 
 version_major       4
 version_minor       0

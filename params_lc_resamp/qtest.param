@@ -11,7 +11,7 @@ steps       315     307      300      293      286      279      272      266   
 output_fname  /cosmo/homes/dkorytov/data/cosmoDC2/protoDC2_v3/qtest${step}.hdf5
 
 use_slope true
-substeps  10
+substeps  1
 short     true
 supershort true
 
