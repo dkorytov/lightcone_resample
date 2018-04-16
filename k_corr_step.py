@@ -92,7 +92,7 @@ def get_keys(hgroup):
 
 
 
-def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=False):
+def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file, output_index_only = False, verbose=False):
     """Load two ajdacent galacticus snapshots (step 1 going to step
     2). Idenitify the same galaxies in the two snapshots either
     through having the same nodeIndex for satellites, or finding the
@@ -135,6 +135,14 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file,verbose=F
         print(np.sum(nodeIndex1==nodeIndex2[match_2to1]),nodeIndex1.size)
         print("result: \n\tMatched: {}, no match: {}".format(num_match, num_mismatch))
         print("\t done getting central indexes {:.2f}".format(t5-t4))
+    if output_index_only:
+        t6 = time.time()
+        hfile_out = h5py.File(output_file,'w')
+        hfile_out['match_2to1'] = match_2to1
+        if verbose:
+            print("wrote index to file. time: {:f.2}".format(time.time()-t6))
+            print("Step done. Time: {:f.2}".format(time.time()-t1))
+        return
     #Now we have found all galaxies from step1 in step2--stored in match_1to2
     #Next is to iterrate over all the filters and calculate the rate of change going from
     #step1 to step2
@@ -337,6 +345,7 @@ if __name__ == "__main__":
     steps  = param.get_int_list("steps")
     mtree_ptrn = param.get_string("mtree_ptrn")
     mtree_num  = param.get_int("mtree_num")
+    output_index_only = param.get_bool("output_index_only")
     output_ptrn = param.get_string("output_ptrn")
     mto = MTreeObj()
     verbose = True
@@ -348,6 +357,7 @@ if __name__ == "__main__":
             step1 = steps[i+1]
             print("rank: {}. Working on {} -> {}".format(rank,step1,step2))
             match_index(gltcs_snapshots_ptrn, step1, step2, mto,
-                        output_ptrn.replace("${step}", str(step1)),
+                        output_ptrn.replace("${step}", str(step1)), 
+                        output_index_only = output_index_only,
                         verbose=True)
 
