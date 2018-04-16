@@ -1403,6 +1403,8 @@ if __name__ == "__main__":
     supershort = param.get_bool('supershort')
     substeps = param.get_int('substeps')
     use_substep_redshift = param.get_bool('use_substep_redshift')
+    load_mask = param.get_bool("load_mask")
+    mask_loc  = param.get_string("mask_loc")
     plot = param.get_bool('plot')
     plot_substep = param.get_bool('plot_substep')
     use_dust_factor = param.get_bool('use_dust_factor')
@@ -1411,8 +1413,11 @@ if __name__ == "__main__":
     version_major = param.get_int('version_major')
     version_minor = param.get_int('version_minor')
     version_minor_minor = param.get_int('version_minor_minor')
-    selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
-    selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
+    if load_mask:
+        hfile_mask = h5py.File(mask_loc,'r')
+    else:
+        selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
+        selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
     stepz = dtk.StepZ(200,0,500)
     output_step_list = []
     step_size = steps.size
@@ -1430,9 +1435,18 @@ if __name__ == "__main__":
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
-        mask1 = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selections=selection1)
-        mask2 = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selections=selection2)
-        mask_all = mask1 & mask2
+        if load_mask:
+            mask1 = hfile_mask['{}'.format(step)].value
+            mask2 = hfile_mask['{}'.format(step2)].value
+        else:
+            mask_a = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selections=selection1)
+            mask_b = galmatcher.mask_cat(h5py.File(gltcs_step_fname, 'r'), selections=selection2)
+            mask1 = mask_a & mask_b
+            gltcs_step2_fname = gltcs_fname.replace("${step}",str(step2))
+            mask_a = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection1)
+            mask_b = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection2)
+            mask2 = mask_a & mask_b
+            
         verbose = True
         lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
         if(use_slope):
@@ -1466,15 +1480,16 @@ if __name__ == "__main__":
                         gal_prop_tmp,_ = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
                                                                                  step_a, abins_avg[k],
                                                                                  verbose = verbose,
-                                                                                 mask = mask_all,
+                                                                                 mask = mask1,
                                                                                  dust_factor=dust_factor)
+                        #gal_prop_tmp2 = construc_gal_prop_redshift_dust_raw(gltcs_step_gname,
                         gal_prop_list.append(gal_prop_tmp)
                     gal_prop_a = cat_dics(gal_prop_list)
                 else:
                     gal_prop_a, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
                                                                         step_a, abins_avg[k],
                                                                         verbose = verbose,
-                                                                        mask = mask_all)
+                                                                        mask = mask1)
                 # Find the closest Galacticus galaxy
                 index_abin = resample_index(lc_data_a, gal_prop_a, verbose = verbose)
                 if use_dust_factor:
@@ -1506,10 +1521,10 @@ if __name__ == "__main__":
                     # h_in_gp = h5py.File(gltcs_step_fname,'r')['galaxyProperties']
                     # h_in_slope_gp = h5py.File(gltcs_slope_step_fname,'r')['galaxyProperties']
                     # del_a = lc_a-step_a
-                    # lum_g = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask_all, match_dust_factors)
-                    # lum_r = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask_all, match_dust_factors)
-                    # lum_i = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask_all, match_dust_factors)
-                    # sm = get_column_slope_dust("totalMassStellar", h_in_gp, h_in_slope_gp, index, del_a, mask_all, match_dust_factors)
+                    # lum_g = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
+                    # lum_r = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
+                    # lum_i = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
+                    # sm = get_column_slope_dust("totalMassStellar", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
                     # mag_g = -2.5*np.log10(lum_g)
                     # mag_r = -2.5*np.log10(lum_r)
                     # mag_i = -2.5*np.log10(lum_i)
@@ -1525,25 +1540,25 @@ if __name__ == "__main__":
                 copy_columns_slope_dust(gltcs_step_fname, gltcs_slope_step_fname, 
                                         output_step_loc, index, 
                                         step_a, lc_a_cc,
-                                        verbose=verbose, mask=mask_all, short = short, supershort=supershort,
+                                        verbose=verbose, mask=mask1, short = short, supershort=supershort,
                                         step = step, dust_factors = match_dust_factors)
             else:
                 copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
                                    output_step_loc, index, 
                                    step_a, lc_a,
-                                   verbose=verbose, mask=mask_all, 
+                                   verbose=verbose, mask=mask1, 
                                    short = short, supershort = supershort, step = step)
             
         else:
             print("using no slope", step)
-            gal_prop_simple,mask_simple = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask_all)
+            gal_prop_simple,mask_simple = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask1)
             if use_dust_factor:
                 masks = []
                 gal_props = []
                 masks.append(mask_simple)
                 gal_props.append(gal_prop_simple)
                 for dust_factor in dust_factors:
-                    gp, m = construct_gal_prop_dust_factor(gltcs_step_fname, dust_factor, verbose = verbose,mask =mask_all)
+                    gp, m = construct_gal_prop_dust_factor(gltcs_step_fname, dust_factor, verbose = verbose,mask =mask1)
                     gal_props.append(gp)
                     masks.append(m)
                 gal_prop = cat_dics(gal_props)
