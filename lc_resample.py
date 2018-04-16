@@ -588,10 +588,43 @@ def get_column_slope_dust(key, h_in_gp, h_in_slope_gp, index, del_a, mask = None
             new_data = data[index] + slope[index]*del_a
     else:
         new_data = data[index]
-
     return new_data
 
 
+def get_column_slope_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors=1.0):
+    """This function returns the interpolated quantity between two
+    timesteps, from step1 to step2. Some galaxies are masked out: Any
+    galaxy that doesn't pass the mask in step1 (mask1), any galaxy
+    that doesn't a decendent in step2, or any galaxy that whose
+    descendent doesn't pass the step2 mask (mask2).
+
+    """
+
+    step_del_a = step2_a - step1_a
+    target_del_a = target_a - step1_a
+    # The masking all galaxies that fail galmatcher's requirements at
+    # step1, galaxies that don't have a descndent, or if the
+    # descendent galaxy at step2 doesn't pass galmatcher requirements.
+    mask_tot = mask1 & (index != -1) & mask2[index]
+    if ":dustAtlas" in key:
+        key_no_dust = key.replace(":dustAtlas","")
+        val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
+        val1_dust = h_in_gp1[key].value[mask_tot]
+        dust_effect = val1_dust/val1_no_dust
+
+        val2_no_dust = h_ing_gp2[key].value[index][mask_tot]
+        slope = val2_no_dust - val1_no_dust
+        val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_effect)
+    else:
+        val1_data = h_in_gp1[key].value[mask_tot]
+        val2_data = h_in_gp2[key].value[index][mask_tot]
+        slope = (val2_data - val1_data)/step_del_a
+        val_out = val1_data + slope*target_del_a
+    if(val_out.dtype == np.float64):
+        val_out = val_out.astype(np.float32)
+    return val_out
+        
+    
 def copy_columns_slope_dust(input_fname, input_slope_fname, 
                             output_fname, index,  
                             input_a, lc_a, 
