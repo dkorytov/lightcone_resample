@@ -39,14 +39,6 @@ def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     gal_prop['Mag_r']  = mag_r[mask]
     gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
     gal_prop['clr_ri'] = mag_r[mask]-mag_i[mask]
-
-    # gal_prop['Mag_g']  = mag_g[mask]
-    # gal_prop['Mag_i']  = mag_i[mask]
-    print(mag_g)
-    print(mag_r)
-    print(mag_i)
-    print(gal_prop['clr_gr'])
-    print(gal_prop['clr_ri'])
     if verbose:
         print('done loading gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
@@ -166,15 +158,13 @@ def clean_up_gal_prop(gal_prop):
     kdtree query.
 
     """
-    print("Cleaning up")
+    print("Cleaning up gal prop: ",end="")
     slct_nfnt =  ~np.isfinite(gal_prop['m_star'])
     for key in gal_prop.keys():
         slct_nfnt = slct_nfnt | ~np.isfinite(gal_prop[key])
-        print(slct_nfnt)
-        print(np.sum(slct_nfnt))
+        print("bad vals: ", np.sum(slct_nfnt))
     for key in gal_prop.keys():
         gal_prop[key][slct_nfnt] = -4
-    #pdb.set_trace()
     return gal_prop
 
 
@@ -202,17 +192,13 @@ def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=F
     mag_i_delta = -2.5*np.log10(mag_id) - -2.5*np.log10(mag_ind)
     if mask is None:
         print("mask is none")
-        mask = np.ones(mag_r.size,dtype=bool)
+        mask = np.ones(mag_gd.size,dtype=bool)
     if mag_r_cut:
-        raise
-        mask = (mag_r < -10) & mask
+        mask = (mag_rd < -10) & mask
     if index is None:
         print("index is none")
         index = np.arange(0,np.sum(mask)-1,dtype='i4')
     m_star_slp = hgp_slp['totalMassStellar'].value
-    # print("mask: ",np.sum(mask)/np.size(mask), mask[:20])
-    # print("M_star slp: ", np.sum(np.isnan(m_star_slp)))
-    # print(index[:10])
     # no dust interpolation slopes
     mag_gnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value
     mag_rnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
@@ -221,19 +207,8 @@ def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=F
     mag_g = -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a) + mag_g_delta[mask][index]*dust_factor
     mag_r = -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a) + mag_r_delta[mask][index]*dust_factor
     mag_i = -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a) + mag_i_delta[mask][index]*dust_factor
-    # print("const nan: ", np.sum(np.isnan(m_star_const[mask][index])))
-    # print("slope nan: ", np.sum(np.isnan(m_star_slp[mask][index]*del_a)))
-    # print("all nan: ", np.sum(np.isnan(m_star_const[mask][index] + m_star_slp[mask][index]*del_a)))
-    # print("nan values:")
     m_star = np.log10(m_star_const[mask][index] + m_star_slp[mask][index]*del_a)
     indx = [ 355112, 2744050, 3707872, 5329360, 5963433, 5984882]
-    # print(snap_a, target_a, del_a)
-    # print("====")
-    # print(indx)
-    # print(m_star_const[mask][index][indx])
-    # print(m_star_slp[mask][index][indx])
-    # print(m_star_slp[mask][index][indx]*del_a)
-    # print(m_star_const[mask][index][indx] + m_star_slp[mask][index][indx]*del_a)
     gal_prop['m_star'] = m_star
     gal_prop['Mag_r'] = mag_r
     gal_prop['clr_gr'] = mag_g - mag_r
@@ -241,18 +216,60 @@ def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=F
     gal_prop['dust_factor'] = np.ones(m_star.size,dtype='f4')*dust_factor
     gal_prop['index'] = np.arange(m_star.size,dtype='i8')
     gal_prop = clean_up_gal_prop(gal_prop)
-    print("nan test")
-    print(np.sum(np.isnan(gal_prop['m_star'])))
-    print("nan test")
-    print(np.sum(~np.isfinite(gal_prop['m_star'])))
     if verbose:
         print('done loading slope gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
 
 
+def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, mask1, mask2, dust_factor = 1.0):
+    """Constructs gal_prop using the interpolation scheme from the galacticus
+    snapshots and index matching galaxies in step2 to galaxies in step1. 
+    """
+    h_in_gp1 = h5py.File(fname.replace("${step}", str(step1)), 'r')['galaxyProperties']
+    h_in_gp2 = h5py.File(fname.replace("${step}", str(step2)), 'r')['galaxyProperties']
+    stepz = dtk.StepZ(sim_name="AlphaQ")
+    step1_a = stepz.get_a(step1)
+    step2_a = stepz.get_a(step2)
+    
+    lum_g = get_column_interpolation_dust_raw(
+        'SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
+    lum_r = get_column_interpolation_dust_raw(
+        'SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
+    lum_i = get_column_interpolation_dust_raw(
+        'SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
+    m_star = get_column_interpolation_dust_raw(
+        'totalMassStellar',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
+    mag_g = -2.5*np.log10(lum_g)
+    mag_r = -2.5*np.log10(lum_r)
+    mag_i = -2.5*np.log10(lum_i)
+    size = m_star.size
+    gal_prop = {}
+    gal_prop['m_star'] = np.log10(m_star)
+    gal_prop['Mag_r']  = mag_r
+    gal_prop['clr_gr'] = mag_g - mag_r
+    gal_prop['clr_ri'] = mag_r - mag_i
+    gal_prop['dust_factor'] = np.ones(size, dtype='f4')
+    gal_prop['index']  = np.arange(size, dtype='i8')
+    print("nan test")
+    print(np.sum(np.isnan(gal_prop['m_star'])))
+    print("not finite test")
+    print(np.sum(~np.isfinite(gal_prop['m_star'])))
+    print(gal_prop['m_star'][np.isnan(gal_prop['m_star'])])
+    return gal_prop
+
+
 def construct_many_gal_prop_redshift_dust(fname, slope_fname, snap_a, target_a_list, verbose=False,mask=None,mag_r_cut = False,index = None, dust_factor_list = [1.0] ):
     t1 = time.time()
-    del_a = target_a - snap_a
+    #TODO target_a not defined
+    del_a = target_a_list - snap_a
     gal_prop = {}
     gal_prop_slope = {}
     hfile = h5py.File(fname,'r')
@@ -273,9 +290,9 @@ def construct_many_gal_prop_redshift_dust(fname, slope_fname, snap_a, target_a_l
     mag_r_delta = -2.5*np.log10(mag_rd) - -2.5*np.log10(mag_rnd)
     mag_i_delta = -2.5*np.log10(mag_id) - -2.5*np.log10(mag_ind)
     if mask is None:
-        mask = np.ones(mag_r.size,dtype=bool)
+        mask = np.ones(mag_rnd.size,dtype=bool)
     if mag_r_cut:
-        mask = (mag_r < -10) & mask
+        mask = (mag_rnd < -10) & mask
     if index is None:
         index = np.arange(0,np.sum(mask)-1,dtype='i4')
     m_star_slp = hgp_slp['totalMassStellar'].value
@@ -591,13 +608,66 @@ def get_column_slope_dust(key, h_in_gp, h_in_slope_gp, index, del_a, mask = None
     return new_data
 
 
-def get_column_slope_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors=1.0):
+def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors, kdtree_index=None):
     """This function returns the interpolated quantity between two
     timesteps, from step1 to step2. Some galaxies are masked out: Any
     galaxy that doesn't pass the mask in step1 (mask1), any galaxy
     that doesn't a decendent in step2, or any galaxy that whose
     descendent doesn't pass the step2 mask (mask2).
 
+    """
+    print("Loading key: {}".format(key))
+    print("\t dust: ", dust_factor)
+    step_del_a = step2_a - step1_a
+    target_del_a = target_a - step1_a
+    # The masking all galaxies that fail galmatcher's requirements at
+    # step1, galaxies that don't have a descndent, or if the
+    # descendent galaxy at step2 doesn't pass galmatcher requirements.
+    mask_tot = mask1 & (index != -1) & mask2[index]
+    if ":dustAtlas" in key:
+        key_no_dust = key.replace(":dustAtlas","")
+        val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
+        val1_dust = h_in_gp1[key].value[mask_tot]
+        val2_no_dust = h_in_gp2[key].value[index][mask_tot]
+        dust_effect = val1_dust/val1_no_dust
+        slope = (val2_no_dust - val1_no_dust)/step_del_a
+        if kdtree_index is None:
+            val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_factor)
+        else:
+            val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*(dust_effect[kdtree_index]**dust_factor)
+    else:
+        val1_data = h_in_gp1[key].value[mask_tot]
+        val2_data = h_in_gp2[key].value[index][mask_tot]
+        if key == "totalMassStellar":
+            print("val1 & val2 min max")
+            print(np.min(val1_data), np.max(val1_data))
+            print(np.min(val2_data), np.max(val2_data))
+            print("masked raw val2s")
+            data = h_in_gp2[key].value[mask2]
+            print(np.min(data), np.max(data))
+        slope = (val2_data - val1_data)/step_del_a
+        if kdtree_index is None:
+            val_out = val1_data + slope*target_del_a
+            if key == "totalMassStellar":
+                print("vals out: ")
+                print(np.min(val_out), np.max(val_out))
+                print("slope")
+                print(np.min(slope), np.max(slope))
+                print("del_a")
+                print(np.min(target_del_a), np.max(target_del_a))
+                print("step a info")
+                print(" {} - {} = {}".format(step2_a, step1_a, step_del_a))
+        else:
+            val_out = val1_data[kdtree_index] + slope[kdtree_index]*target_del_a
+    if(val_out.dtype == np.float64):
+        val_out = val_out.astype(np.float32)
+    return val_out
+
+
+def get_func_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors=1.0):
+    """Returns the constants required to reconstruct the column at any redshift between 
+    the interpolation steps. The return values are val0, slope0 and dust_effect0 for the
+    function val(z, dust) = (val0 + slope0*del_a)*(dust_effect0**dust_factor)
     """
 
     step_del_a = step2_a - step1_a
@@ -610,21 +680,27 @@ def get_column_slope_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step
         key_no_dust = key.replace(":dustAtlas","")
         val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
         val1_dust = h_in_gp1[key].value[mask_tot]
-        dust_effect = val1_dust/val1_no_dust
-
-        val2_no_dust = h_ing_gp2[key].value[index][mask_tot]
-        slope = val2_no_dust - val1_no_dust
-        val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_effect)
+        val2_no_dust = h_in_gp2[key].value[index][mask_tot]
+        dust_effect0 = val1_dust/val1_no_dust
+        val0 = val1_no_dust
+        slope0 = (val2_no_dust - val1_no_dust)/step_del_a
+        #val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_effect)
     else:
         val1_data = h_in_gp1[key].value[mask_tot]
         val2_data = h_in_gp2[key].value[index][mask_tot]
-        slope = (val2_data - val1_data)/step_del_a
-        val_out = val1_data + slope*target_del_a
-    if(val_out.dtype == np.float64):
-        val_out = val_out.astype(np.float32)
-    return val_out
-        
+        slope0 = (val2_data - val1_data)/step_del_a
+        val0 = val1_data
+        dust_effect0 = np.ones(val0.size, dtype='f4')
+        #val_out = val1_data + slope*target_del_a
+    if(val0.dtype == np.float64):
+        val0 = val0.astype(np.float32)
+    if(slope0.dtype == np.float64):
+        slope0 = slope0.astype(np.float32)
+    if(dust_effect0.dtype == np.float64):
+        dust_effect0 = dust_effect0.astype(np.float32)
+    return val0, slope0, dust_effect0
     
+
 def copy_columns_slope_dust(input_fname, input_slope_fname, 
                             output_fname, index,  
                             input_a, lc_a, 
@@ -650,6 +726,43 @@ def copy_columns_slope_dust(input_fname, input_slope_fname,
         if verbose:
             print('{}/{} [{}] {}'.format(i,len(keys),step, key))
         new_data = get_column_slope_dust(key, h_in_gp, h_in_slope_gp, index, del_a, mask, dust_factors)
+        slct_finite = np.isfinite(new_data)
+        #If the data is a double, record it as a float to save on disk space
+        if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
+            h_out_gp[key]= new_data.astype(np.float32)
+        else:
+            h_out_gp[key] = new_data
+    return
+
+
+def copy_columns_interpolation_dust_raw(input_fname, output_fname,
+                                        kdtree_index, step1, step2,
+                                        step1_a, step2_a, mask1, mask2, 
+                                        index_2to1, lc_a, 
+                                        verbose = False, 
+                                        short = False, supershort = False, 
+                                        step = -1, dust_factors = 1.0):
+    print("===================================")
+    print("copy columns interpolation dust raw")
+    # lc_a = 1.0/(1.0+lc_redshift)
+    # input_a = 1.0/(1.0 + input_redshift)
+    del_a = lc_a-step1_a
+    print("del_a: ", del_a)
+    h_out = h5py.File(output_fname,'w')
+    h_out_gp = h_out.create_group('galaxyProperties')
+    h_in_gp1 = h5py.File(input_fname.replace("${step}",str(step1)),'r')['galaxyProperties']
+    h_in_gp2 = h5py.File(input_fname.replace("${step}",str(step2)),'r')['galaxyProperties']
+    keys = get_keys(h_in_gp1)
+    max_float = np.finfo(np.float32).max #The max float size
+    for i in range(0,len(keys)):
+        key = keys[i]
+        if not to_copy(key, short, supershort):
+            continue
+        if verbose:
+            print('{}/{} [{}] {}'.format(i,len(keys),step, key))
+        new_data = get_column_interpolation_dust_raw(
+            key, h_in_gp1, h_in_gp2, index_2to1, mask1, mask2, step1_a, step2_a, lc_a, dust_factors, 
+            kdtree_index = kdtree_index)
         slct_finite = np.isfinite(new_data)
         #If the data is a double, record it as a float to save on disk space
         if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
@@ -1371,20 +1484,84 @@ def plot_clr_z(lc_data, gal_prop, index,clr='clr_gr'):
     axs[0].grid()
     axs[0].set_title('UMachine + SDSS')
     axs[0].set_xlabel('redshift')
-    axs[0].set_ylabel(key)
+    axs[0].set_ylabel(clr)
     h,xbins,ybins = np.histogram2d(gal_prop['redshift'][index],gal_prop[clr][index],bins=(xbins,ybins))
     axs[1].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
     axs[1].grid()
     axs[1].set_title('Matched Galacticus')
     axs[1].set_xlabel('redshift')
-    axs[1].set_ylabel(key)
+    axs[1].set_ylabel(clr)
     h,xbins,ybins = np.histogram2d(gal_prop['redshift'],gal_prop[clr],bins=(xbins,ybins))
     axs[2].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
     axs[2].grid()
     axs[2].set_title('Galacticus ')
     axs[2].set_xlabel('redshift')
-    axs[2].set_ylabel(key)
+    axs[2].set_ylabel(clr)
     
+
+def plot_gal_prop_dist(gal_props, gal_props_names):
+    num = len(gal_props)
+    num_list = range(0, num)
+    plt.figure()
+    bins = np.linspace(5,14,100)
+    for i in num_list:
+        h,xbins = np.histogram(gal_props[i]['m_star'], bins = bins, normed=True)
+        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
+    plt.grid()
+    plt.xlabel('m_star')
+    plt.ylabel('count')
+    plt.legend(loc='best', framealpha=0.3)
+
+    plt.figure()
+    bins = np.linspace(-25,-10, 100)
+    for i in num_list:
+        h,xbins = np.histogram(gal_props[i]['Mag_r'], bins = bins, normed=True)
+        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
+    plt.grid()
+    plt.xlabel('Mag_r')
+    plt.ylabel('count')
+    plt.legend(loc='best', framealpha=0.3)
+
+    plt.figure()
+    bins = np.linspace(-.5,3, 100)
+    for i in num_list:
+        h,xbins = np.histogram(gal_props[i]['clr_gr'], bins = bins, normed=True)
+        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
+    plt.grid()
+    plt.xlabel('clr_gr')
+    plt.ylabel('count')
+    plt.legend(loc='best', framealpha=0.3)
+
+    plt.figure()
+    bins = np.linspace(-.5,3, 100)
+    for i in num_list:
+        h,xbins = np.histogram(gal_props[i]['clr_ri'], bins = bins, normed=True)
+        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
+    plt.grid()
+    plt.xlabel('clr_ri')
+    plt.ylabel('count')
+    plt.legend(loc='best', framealpha=0.3)
+    
+    xbins, ybins = (np.linspace(-25,-10,250), np.linspace(-.5,2,250))
+    fig, axs = plt.subplots(1,num,figsize=(num*5,5), sharex = True)
+    for i in num_list:
+        h,xbins,ybins = np.histogram2d(gal_props[i]['Mag_r'], gal_props[i]['clr_gr'],bins=(xbins,ybins))
+        axs[i].pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+        axs[i].grid()
+        axs[i].set_title(gal_props_names[i])
+        axs[i].set_xlabel('Mag_r')
+        axs[i].set_ylabel('clr_gr')
+
+    fig, axs = plt.subplots(1,num,figsize=(num*5,5), sharex = True)
+    for i in num_list:
+        h,xbins,ybins = np.histogram2d(gal_props[i]['Mag_r'], gal_props[i]['clr_ri'],bins=(xbins,ybins))
+        axs[i].pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+        axs[i].grid()
+        axs[i].set_title(gal_props_names[i])
+        axs[i].set_xlabel('Mag_r')
+        axs[i].set_ylabel('clr_ri')
+    
+
 
 if __name__ == "__main__":
     t00 = time.time()
@@ -1405,6 +1582,7 @@ if __name__ == "__main__":
     use_substep_redshift = param.get_bool('use_substep_redshift')
     load_mask = param.get_bool("load_mask")
     mask_loc  = param.get_string("mask_loc")
+    index_loc = param.get_string("index_loc")
     plot = param.get_bool('plot')
     plot_substep = param.get_bool('plot_substep')
     use_dust_factor = param.get_bool('use_dust_factor')
@@ -1446,7 +1624,8 @@ if __name__ == "__main__":
             mask_a = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection1)
             mask_b = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection2)
             mask2 = mask_a & mask_b
-            
+        #The index remap galaxies in step2 to the same order as they were in step1
+        index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1']
         verbose = True
         lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
         if(use_slope):
@@ -1477,13 +1656,17 @@ if __name__ == "__main__":
                     gal_prop_list = [] 
                     for dust_factor in np.concatenate(([1.0],dust_factors)):
                         print("dust_factor********=",dust_factor)
-                        gal_prop_tmp,_ = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
-                                                                                 step_a, abins_avg[k],
-                                                                                 verbose = verbose,
-                                                                                 mask = mask1,
-                                                                                 dust_factor=dust_factor)
-                        #gal_prop_tmp2 = construc_gal_prop_redshift_dust_raw(gltcs_step_gname,
-                        gal_prop_list.append(gal_prop_tmp)
+                        # gal_prop_tmp,_ = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
+                        #                                                          step_a, abins_avg[k],
+                        #                                                          verbose = verbose,
+                        #                                                          mask = mask1,
+                        #                                                          dust_factor=dust_factor)
+                        gal_prop_tmp2 = construct_gal_prop_redshift_dust_raw(
+                            gltcs_fname, index_2to1, step, step2, abins_avg[k],
+                            mask1, mask2, dust_factor)
+                        # plot_gal_prop_dist([gal_prop_tmp, gal_prop_tmp2], ["old method", "new method"])
+                        # plt.show()
+                        gal_prop_list.append(gal_prop_tmp2)
                     gal_prop_a = cat_dics(gal_prop_list)
                 else:
                     gal_prop_a, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
@@ -1495,6 +1678,8 @@ if __name__ == "__main__":
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
                     # offset the index for the extra dust gal_prop 
+                    print('index_abin: ', np.min(index_abin), np.max(index_abin))
+                    print('gal_prop_a: ', np.min(gal_prop_a['index']), np.max(gal_prop_a['index']))
                     a = gal_prop_a['index'][index_abin]
                     index[slct_lc_abin] = a
                     # = index_abin%(index_abin.size//(1+len(dust_factors)))
@@ -1537,11 +1722,16 @@ if __name__ == "__main__":
             assert(np.sum(slct_neg) == 0)
             # TODO Only allow 
             if use_dust_factor: 
-                copy_columns_slope_dust(gltcs_step_fname, gltcs_slope_step_fname, 
-                                        output_step_loc, index, 
-                                        step_a, lc_a_cc,
-                                        verbose=verbose, mask=mask1, short = short, supershort=supershort,
-                                        step = step, dust_factors = match_dust_factors)
+                # copy_columns_slope_dust(gltcs_step_fname, gltcs_slope_step_fname, 
+                #                         output_step_loc, index, 
+                #                         step_a, lc_a_cc,
+                #                         verbose=verbose, mask=mask1, short = short, supershort=supershort,
+                #                         step = step, dust_factors = match_dust_factors)
+                copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
+                                                step, step2, step_a, step2_a, mask1, mask2, 
+                                                index_2to1, lc_a_cc, verbose = verbose,
+                                                short = short, supershort = supershort,
+                                                    dust_factors = match_dust_factors, step = step)
             else:
                 copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
                                    output_step_loc, index, 
