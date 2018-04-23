@@ -256,13 +256,13 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
     gal_prop['Mag_r']  = mag_r
     gal_prop['clr_gr'] = mag_g - mag_r
     gal_prop['clr_ri'] = mag_r - mag_i
-    gal_prop['dust_factor'] = np.ones(size, dtype='f4')
+    gal_prop['dust_factor'] = np.ones(size, dtype='f4')*dust_factor
     gal_prop['index']  = np.arange(size, dtype='i8')
-    print("nan test")
-    print(np.sum(np.isnan(gal_prop['m_star'])))
-    print("not finite test")
-    print(np.sum(~np.isfinite(gal_prop['m_star'])))
-    print(gal_prop['m_star'][np.isnan(gal_prop['m_star'])])
+    # print("nan test")
+    # print(np.sum(np.isnan(gal_prop['m_star'])))
+    # print("not finite test")
+    # print(np.sum(~np.isfinite(gal_prop['m_star'])))
+    # print(gal_prop['m_star'][np.isnan(gal_prop['m_star'])])
     return gal_prop
 
 
@@ -396,7 +396,7 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     if verbose:
         t3 = time.time()
         print('\tdone making tree. {}'.format(t3-t2))
-    dist, index = ckdtree.query(lc_mat, nnk, n_jobs=16)
+    dist, index = ckdtree.query(lc_mat, nnk, n_jobs=10)
     if verbose:
         t4= time.time()
         print('\tdone querying. {}'.format(t4-t3))
@@ -616,8 +616,9 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
     descendent doesn't pass the step2 mask (mask2).
 
     """
-    print("Loading key: {}".format(key))
-    print("\t dust: ", dust_factor)
+    print("\tLoading key: {}".format(key), end="")
+    #print("dust_factors: ", dust_factors)
+    t1 = time.time()
     step_del_a = step2_a - step1_a
     target_del_a = target_a - step1_a
     # The masking all galaxies that fail galmatcher's requirements at
@@ -630,37 +631,25 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         val1_dust = h_in_gp1[key].value[mask_tot]
         val2_no_dust = h_in_gp2[key].value[index][mask_tot]
         dust_effect = val1_dust/val1_no_dust
+        #dust_effect = val1_dust - val1_no_dust
         slope = (val2_no_dust - val1_no_dust)/step_del_a
         if kdtree_index is None:
-            val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_factor)
+            val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_factors)
+            #val_out = 10**(val1_no_dust + slope*target_del_a + dust_effect*dust_factor)
         else:
-            val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*(dust_effect[kdtree_index]**dust_factor)
+            val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*(dust_effect[kdtree_index]**dust_factors)
+            #val_out = 10**(val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a + dust_effect[kdtree_index]*dust_factor)
     else:
         val1_data = h_in_gp1[key].value[mask_tot]
         val2_data = h_in_gp2[key].value[index][mask_tot]
-        if key == "totalMassStellar":
-            print("val1 & val2 min max")
-            print(np.min(val1_data), np.max(val1_data))
-            print(np.min(val2_data), np.max(val2_data))
-            print("masked raw val2s")
-            data = h_in_gp2[key].value[mask2]
-            print(np.min(data), np.max(data))
         slope = (val2_data - val1_data)/step_del_a
         if kdtree_index is None:
             val_out = val1_data + slope*target_del_a
-            if key == "totalMassStellar":
-                print("vals out: ")
-                print(np.min(val_out), np.max(val_out))
-                print("slope")
-                print(np.min(slope), np.max(slope))
-                print("del_a")
-                print(np.min(target_del_a), np.max(target_del_a))
-                print("step a info")
-                print(" {} - {} = {}".format(step2_a, step1_a, step_del_a))
         else:
             val_out = val1_data[kdtree_index] + slope[kdtree_index]*target_del_a
     if(val_out.dtype == np.float64):
         val_out = val_out.astype(np.float32)
+    print("\t\tread + format time: {}".format(time.time()-t1))
     return val_out
 
 
@@ -669,7 +658,6 @@ def get_func_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2
     the interpolation steps. The return values are val0, slope0 and dust_effect0 for the
     function val(z, dust) = (val0 + slope0*del_a)*(dust_effect0**dust_factor)
     """
-
     step_del_a = step2_a - step1_a
     target_del_a = target_a - step1_a
     # The masking all galaxies that fail galmatcher's requirements at
@@ -750,11 +738,14 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     print("del_a: ", del_a)
     h_out = h5py.File(output_fname,'w')
     h_out_gp = h_out.create_group('galaxyProperties')
+    h_out_gp['dustFactor'] = dust_factors
     h_in_gp1 = h5py.File(input_fname.replace("${step}",str(step1)),'r')['galaxyProperties']
     h_in_gp2 = h5py.File(input_fname.replace("${step}",str(step2)),'r')['galaxyProperties']
+
     keys = get_keys(h_in_gp1)
     max_float = np.finfo(np.float32).max #The max float size
     for i in range(0,len(keys)):
+        t1 = time.time()
         key = keys[i]
         if not to_copy(key, short, supershort):
             continue
@@ -769,6 +760,7 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
             h_out_gp[key]= new_data.astype(np.float32)
         else:
             h_out_gp[key] = new_data
+        print("\t\tDone writing. read+format+write: {}".format(time.time()-t1))
     return
 
 
