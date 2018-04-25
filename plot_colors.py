@@ -1,12 +1,16 @@
 #!/usr/bin/env python2.7
 
 import numpy as np
+import matplotlib as mlp
 import matplotlib.pyplot as plt
 import matplotlib.colors as clr
 import dtk 
 import h5py
 import sys
 import time
+import pdb
+
+from scipy.stats import binned_statistic_2d
 from numpy.random import normal
 
 def plot_clr_clr(v3_data, key1, key2, title):
@@ -18,6 +22,22 @@ def plot_clr_clr(v3_data, key1, key2, title):
     plt.xlabel('g-r')
     plt.ylabel('r-i')
     plt.title(title)
+
+def plot_clr_z_dist(protoDC2, y_key, dist_keys):
+    fig, axs = plt.subplots(2,2)
+    for i, dist_key in enumerate(dist_keys):
+        ax = axs[i//2, i%2]
+        m, xbins, ybins, _ = binned_statistic_2d(protoDC2['redshift'], protoDC2[y_key],
+                                                 protoDC2[dist_key], bins=250)
+        m = np.ma.array(m, mask = ~np.isfinite(m))
+        absmax = np.nanmax(np.abs(m))
+        im = ax.pcolormesh(xbins, ybins, m.T, cmap='coolwarm', vmin =-0.25, vmax= +0.25)
+        cb = fig.colorbar(im, ax=ax)
+        cb.set_label(dist_key)
+        ax.set_xlabel('redshift')
+        ax.set_ylabel(y_key)
+        ax.grid()
+        ax.set_title(dist_key)
 
 def load_protoDC2(fname):
     t1 = time.time()
@@ -50,7 +70,22 @@ def load_protoDC2(fname):
     result['i-z obs'] = mag_i - mag_z
     result['redshift'] = redshift
     result['dust factor'] = hgroup['dustFactor'].value
-    print(result['dust factor'])
+    result['sm'] = np.log10(hgroup['totalMassStellar'].value)
+    um_mag_r = hgroup['UMachineNative/restframe_extincted_sdss_abs_magr'].value
+    um_clr_gr = hgroup['UMachineNative/restframe_extincted_sdss_gr'].value
+    um_clr_ri = hgroup['UMachineNative/restframe_extincted_sdss_ri'].value
+    um_sm = np.log10(hgroup['UMachineNative/obs_sm'].value)
+    result['um mag r rest'] = um_mag_r
+    result['um g-r rest'] = um_clr_gr
+    result['um r-i rest'] = um_clr_ri
+    result['um sm'] = um_sm
+    
+    result['dist r'] = result['mag r rest'] -um_mag_r
+    result['dist g-r'] = result['g-r rest'] -  um_clr_gr 
+    result['dist r-i'] =  result['r-i rest'] - um_clr_ri
+    result['dist sm'] =  result['sm'] - um_sm
+    result['dist'] = np.sqrt(result['dist r']**2    + result['dist g-r']**2 
+                             + result['dist r-i']**2 + result['dist sm']**2)
     print "\n\ttime: ",time.time() - t1
     return result
 
@@ -86,33 +121,34 @@ if __name__ == "__main__":
     v2 = param.get_int("version_minor")
     v3 = param.get_int("version_minor_minor")
     lc_dics = []
-    for i,step in enumerate(steps):
-        if i == 0:
-            continue
-        lc_dics.append(load_umachine(lightcone_fname.replace("${step}",str(step))))
-    lc_data = append_dics(lc_dics)
+
+    # for i,step in enumerate(steps):
+    #     if i == 0:
+    #         continue
+    #     lc_dics.append(load_umachine(lightcone_fname.replace("${step}",str(step))))
+    # lc_data = append_dics(lc_dics)
     
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(lc_data['redshift'],lc_data['g-r'],bins=(250,250))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('g-r rest'); plt.xlabel('redshift')
-    plt.title("UMachine+SDSS Light Cone")
-    plt.grid()
+    # plt.figure()
+    # h,xbins,ybins = np.histogram2d(lc_data['redshift'],lc_data['g-r'],bins=(250,250))
+    # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    # plt.ylabel('g-r rest'); plt.xlabel('redshift')
+    # plt.title("UMachine+SDSS Light Cone")
+    # plt.grid()
 
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(lc_data['redshift'],lc_data['r-i'],bins=(250,250))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('r-i rest'); plt.xlabel('redshift')
-    plt.title("UMachine+SDSS Light Cone")
-    plt.grid()
-    clrclrbins = np.linspace(-.5,1,250)
+    # plt.figure()
+    # h,xbins,ybins = np.histogram2d(lc_data['redshift'],lc_data['r-i'],bins=(250,250))
+    # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    # plt.ylabel('r-i rest'); plt.xlabel('redshift')
+    # plt.title("UMachine+SDSS Light Cone")
+    # plt.grid()
+    # clrclrbins = np.linspace(-.5,1,250)
 
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(lc_data['g-r'],lc_data['r-i'],bins=(clrclrbins,clrclrbins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.xlabel('g-r rest'); plt.ylabel('r-i rest')
-    plt.title("UMachine+SDSS Light Cone")
-    plt.grid()
+    # plt.figure()
+    # h,xbins,ybins = np.histogram2d(lc_data['g-r'],lc_data['r-i'],bins=(clrclrbins,clrclrbins))
+    # plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    # plt.xlabel('g-r rest'); plt.ylabel('r-i rest')
+    # plt.title("UMachine+SDSS Light Cone")
+    # plt.grid()
 
     
     protoDC2 = load_protoDC2(output_fname.replace("${step}","all"))
@@ -120,95 +156,94 @@ if __name__ == "__main__":
     zbins = np.linspace(0,1,250)
     magobsbins = np.linspace(14,39,100)
     magrestbins = np.linspace(-30,-12,100)
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag r rest'],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('Mag r rest'); plt.xlabel('redshift')
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-    plt.grid()
-
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag g rest'],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('Mag g rest'); plt.xlabel('redshift')
-    plt.grid()
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['g-r obs'],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('g-r observed'); plt.xlabel('redshift')
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-    plt.grid()
-
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['r-i obs'],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('r-i observed'); plt.xlabel('redshift')
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-    plt.grid()
-
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['i-z obs'],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('i-z observed'); plt.xlabel('redshift')
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-    plt.grid()
-
-
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['g-r rest'],protoDC2['r-i rest'],bins=(clrclrbins,clrclrbins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.xlabel('g-r rest'); plt.ylabel('r-i rest')
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-    plt.grid()
-
-
     clrclrbins= np.linspace(-1,2,250)
+    if True:
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag r rest'],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('Mag r rest'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.grid()
 
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['g-r obs'],protoDC2['r-i obs'],bins=(clrclrbins,clrclrbins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.xlabel('g-r observed'); plt.ylabel('r-i observed')
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-    plt.grid()
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['mag g rest'],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('Mag g rest'); plt.xlabel('redshift')
+        plt.grid()
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['g-r obs'],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('g-r observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.grid()
+
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['r-i obs'],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('r-i observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.grid()
+
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['i-z obs'],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('i-z observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.grid()
 
 
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['mag r rest'], protoDC2['g-r rest'],bins=(magrestbins,clrclrbins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.xlabel('r rest'); plt.ylabel('g-r rest')
-    plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
-    plt.grid()
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['g-r rest'],protoDC2['r-i rest'],bins=(clrclrbins,clrclrbins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('g-r rest'); plt.ylabel('r-i rest')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.grid()
 
-    slct = protoDC2['mag r rest']<-18
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['g-r obs'][slct],protoDC2['r-i obs'][slct],bins=(clrclrbins,clrclrbins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.xlabel('g-r observed'); plt.ylabel('r-i observed')
-    plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
-    plt.grid()
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['g-r obs'],protoDC2['r-i obs'],bins=(clrclrbins,clrclrbins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('g-r observed'); plt.ylabel('r-i observed')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.grid()
 
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'][slct],protoDC2['g-r obs'][slct],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('g-r observed'); plt.xlabel('redshift')
-    plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
-    plt.grid()
 
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'][slct],protoDC2['r-i obs'][slct],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('r-i observed'); plt.xlabel('redshift')
-    plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
-    plt.grid()
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['mag r rest'], protoDC2['g-r rest'],bins=(magrestbins,clrclrbins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('r rest'); plt.ylabel('g-r rest')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.grid()
 
-    plt.figure()
-    h,xbins,ybins = np.histogram2d(protoDC2['redshift'][slct],protoDC2['i-z obs'][slct],bins=(zbins,bins))
-    plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    plt.ylabel('i-z observed'); plt.xlabel('redshift')
-    plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
-    plt.grid()
+        slct = protoDC2['mag r rest']<-18
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['g-r obs'][slct],protoDC2['r-i obs'][slct],bins=(clrclrbins,clrclrbins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.xlabel('g-r observed'); plt.ylabel('r-i observed')
+        plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
+        plt.grid()
+
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'][slct],protoDC2['g-r obs'][slct],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('g-r observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
+        plt.grid()
+        
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'][slct],protoDC2['r-i obs'][slct],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('r-i observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
+        plt.grid()
+        
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(protoDC2['redshift'][slct],protoDC2['i-z obs'][slct],bins=(zbins,bins))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.ylabel('i-z observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}\nMr<-18".format(v1,v2,v3))
+        plt.grid()
 
 
     # plt.figure()
@@ -265,5 +300,73 @@ if __name__ == "__main__":
     plt.yscale('log')
     plt.grid()
 
+    plt.figure()
+    h, xbins, ybins = np.histogram2d(protoDC2['um mag r rest'], protoDC2['dist r'], bins = 250)
+    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+    plt.xlabel('um mag r rest')
+    plt.ylabel('distance r (Galaticus - UMachine)')
+
+    plt.figure()
+    h, xbins, ybins = np.histogram2d(protoDC2['um g-r rest'], protoDC2['dist g-r'], bins = 250)
+    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+    plt.xlabel('um g-r rest')
+    plt.ylabel('distance g-r (Galaticus - UMachine)')
+
+    plt.figure()
+    h, xbins, ybins = np.histogram2d(protoDC2['um r-i rest'], protoDC2['dist r-i'], bins = 250)
+    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+    plt.xlabel('um r-i rest')
+    plt.ylabel('distance r-i (Galaticus - UMachine)')
+
+    plt.figure()
+    h, xbins, ybins = np.histogram2d(protoDC2['um sm'], protoDC2['dist sm'], bins = 250)
+    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+    plt.xlabel('um sm')
+    plt.ylabel('distance sm (Galaticus - UMachine)')
+
+    dists = ['dist r', 'dist sm', 'dist g-r', 'dist r-i']
+    plot_clr_z_dist(protoDC2, 'g-r obs', dists)
+    plot_clr_z_dist(protoDC2, 'r-i obs', dists)
+    plot_clr_z_dist(protoDC2, 'i-z obs', dists)
+
+
+
+    if False:
+        cmap = mlp.cm.ScalarMappable(cmap='coolwarm')
+        cmap.set_clim(vmin=-0.4,vmax=0.4)
+        mat = cmap.to_rgba(m.T)
+        print(mat.shape)
+        alpha, _, _ = np.histogram2d(protoDC2['redshift'], protoDC2['g-r obs'], bins=250)
+        alpha = np.log10(alpha)+1.0
+        alpha[~np.isfinite(alpha)] = 0.0
+        alpha = alpha/np.max(alpha)
+        print(alpha)
+        print(np.min(alpha), np.max(alpha))
+        plt.figure()
+        m, xbins, ybins, _ = binned_statistic_2d(protoDC2['redshift'], protoDC2['g-r obs'],
+                                                 protoDC2['dist r'], bins=250)
+        m = np.ma.array(m, mask = ~np.isfinite(m))
+        absmax = np.nanmax(np.abs(m))
+        p = plt.pcolormesh(xbins, ybins, m.T, vmin =-0.25, vmax= +0.25)
+        plt.savefig("tmp/tmp.png")
+        for fc, a in zip(p.get_facecolors(), alpha.flatten()):
+            fc[3]=a
+            cb = plt.colorbar()
+            cb.set_label('dist r')
+            plt.xlabel('redshift')
+            plt.ylabel('g-r rest')
+            
+        plt.figure()
+        plt.pcolor(xbins,ybins,alpha.T)
+    
+        plt.figure()
+        plt.hist(alpha.flatten(), bins=250)
+        plt.figure()
+        mat[:,:,3] = alpha.T
+        plt.imshow(mat,origin='lower')
+
+
     dtk.save_figs("figs/"+sys.argv[1]+"/"+__file__+"/")
     plt.show()
+    
+    pdb.set_trace()
