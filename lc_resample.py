@@ -19,7 +19,7 @@ from scipy.integrate import cumtrapz
 from scipy.interpolate import interp1d
 from cosmodc2.black_hole_modeling import monte_carlo_bh_acc_rate, bh_mass_from_bulge_mass, monte_carlo_black_hole_mass
 from cosmodc2.size_modeling import mc_size_vs_luminosity_late_type, mc_size_vs_luminosity_early_type
-
+from cosmodc2.sdss_colors import assign_restframe_sdss_gri
 import galmatcher
 
 def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
@@ -333,7 +333,7 @@ def construct_many_gal_prop_redshift_dust(fname, slope_fname, snap_a, target_a_l
     return gal_prop_list,mask
 
 
-def construct_lc_data(fname,verbose = False):
+def construct_lc_data(fname,verbose = False, recolor=False):
     t1 = time.time()
     lc_data = {}
     #tbl = Table.read(fname,path='data')
@@ -348,6 +348,32 @@ def construct_lc_data(fname,verbose = False):
     lc_data['clr_ri'] = hfile['restframe_extincted_sdss_ri'].value
     lc_data['redshift'] = hfile['redshift'].value
     lc_data['sfr_percentile'] = hfile['sfr_percentile'].value
+    if recolor:
+        print(hfile.keys())
+        upid_mock = hfile['upid'].value
+        mstar_mock = hfile['obs_sm'].value
+        sfr_percentile_mock = hfile['sfr_percentile'].value
+        host_halo_mvir_mock = hfile['host_halo_mvir'].value
+        redshift_mock = lc_data['redshift']
+        a,b,c = assign_restframe_sdss_gri(upid_mock, mstar_mock, sfr_percentile_mock,
+                                          host_halo_mvir_mock, redshift_mock)
+        # plt.figure()
+        # h,xbins,ybins = np.histogram2d(lc_data['Mag_r'], a, bins=250)
+        # plt.pcolor(xbins,ybins, h.T, cmap='PuBu', norm =clr.LogNorm())
+        # plt.grid()
+
+        # plt.figure()
+        # h,xbins,ybins = np.histogram2d(lc_data['clr_gr'], b, bins=250)
+        # plt.pcolor(xbins,ybins, h.T, cmap='PuBu', norm =clr.LogNorm())
+        # plt.grid()
+
+        # plt.figure()
+        # h,xbins,ybins = np.histogram2d(lc_data['clr_ri'], c, bins=250)
+        # plt.pcolor(xbins,ybins, h.T, cmap='PuBu', norm =clr.LogNorm())
+        # plt.grid()
+        # plt.show()
+        lc_data['Mag_r'], lc_data['clr_gr'], lc_data['clr_ri'] = [a,b,c]
+        
     if verbose:
         print('done loading lc data. {}'.format(time.time()-t1))
     return lc_data
@@ -1575,6 +1601,7 @@ if __name__ == "__main__":
     load_mask = param.get_bool("load_mask")
     mask_loc  = param.get_string("mask_loc")
     index_loc = param.get_string("index_loc")
+    recolor = param.get_bool('recolor')
     plot = param.get_bool('plot')
     plot_substep = param.get_bool('plot_substep')
     use_dust_factor = param.get_bool('use_dust_factor')
@@ -1619,7 +1646,7 @@ if __name__ == "__main__":
         #The index remap galaxies in step2 to the same order as they were in step1
         index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1']
         verbose = True
-        lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose)
+        lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor)
         if(use_slope):
             print("using slope", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
@@ -1690,10 +1717,10 @@ if __name__ == "__main__":
                     plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
                     plot_side_by_side(lc_data_a, gal_prop_a, index_abin)
                     mag_bins = (-21,-20,-19)
-                    plot_mag_r(lc_data, gal_prop_a, index_abin)
-                    plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color')
+                    plot_mag_r(lc_data_a, gal_prop_a, index_abin)
+                    plot_clr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color')
                     #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
-                    plot_ri_gr_mag(lc_data, gal_prop_a, index_abin, mag_bins)
+                    plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins)
                     plt.show()
                     # h_in_gp = h5py.File(gltcs_step_fname,'r')['galaxyProperties']
                     # h_in_slope_gp = h5py.File(gltcs_slope_step_fname,'r')['galaxyProperties']
