@@ -11,7 +11,7 @@ import time
 import datetime
 from astropy.table import Table
 
-def load_lightcone(lc_fname,shr_fname):
+def load_lightcone(lc_fname, shr_fname, fake_shear):
     print("loading lightcone...",end='')
     t1 = time.time()
     lc = {}
@@ -28,12 +28,22 @@ def load_lightcone(lc_fname,shr_fname):
     lc['lightcone_rotation'] = np.fromfile(lc_fname.replace("${var}","rotation"),dtype='i4')
     lc['lightcone_replication'] = np.fromfile(lc_fname.replace("${var}","replication"),dtype='i4')
     #shear info
-    lc['ra_lensed'] = np.fromfile(shr_fname.replace("${var}","xr1"),dtype='f4')/3600.0
-    lc['dec_lensed'] = np.fromfile(shr_fname.replace("${var}","xr2"),dtype='f4')/3600.0
-    lc['shear1'] = np.fromfile(shr_fname.replace("${var}","sr1"),dtype='f4')
-    lc['shear2'] = np.fromfile(shr_fname.replace("${var}","sr2"),dtype='f4')
-    lc['magnification'] = np.fromfile(shr_fname.replace("${var}","mra"),dtype='f4')
-    lc['convergence'] = np.fromfile(shr_fname.replace("${var}","kr0"),dtype='f4')
+    if fake_shear:
+        print("Faking the shears!")
+        zeros = np.zeros(lc['x'].size,dtype='f4')
+        lc['ra_lensed']     = np.copy(lc['ra'])
+        lc['dec_lensed']    = np.copy(lc['dec'])
+        lc['shear1']        = np.copy(zeros)
+        lc['shear2']        = np.copy(zeros)
+        lc['magnification'] = np.copy(zeros)
+        lc['convergence']   = np.copy(zeros)
+    else:
+        lc['ra_lensed'] = np.fromfile(shr_fname.replace("${var}","xr1"),dtype='f4')/3600.0
+        lc['dec_lensed'] = np.fromfile(shr_fname.replace("${var}","xr2"),dtype='f4')/3600.0
+        lc['shear1'] = np.fromfile(shr_fname.replace("${var}","sr1"),dtype='f4')
+        lc['shear2'] = np.fromfile(shr_fname.replace("${var}","sr2"),dtype='f4')
+        lc['magnification'] = np.fromfile(shr_fname.replace("${var}","mra"),dtype='f4')
+        lc['convergence'] = np.fromfile(shr_fname.replace("${var}","kr0"),dtype='f4')
     print("done {}".format(time.time()-t1))
     return lc
 
@@ -108,6 +118,7 @@ if __name__ == "__main__":
     lightcone_output_fname = param.get_string("lightcone_output_fname")
     steps = param.get_int_list("steps")
     steps_shr = param.get_string_list("steps_shr")
+    fake_shears = param.get_bool("fake_shears")
     t0 =time.time()
     lcs = []
     for step,step_shr in zip(steps,steps_shr):
@@ -115,7 +126,7 @@ if __name__ == "__main__":
         print("\n\n=====================\n STEP: {}".format(step))
         lightcone_step_fname = lightcone_bin_fname.replace("${step}",str(step))
         shear_step_fname = shear_bin_fname.replace("${step}",str(step)).replace("${step_shr}",step_shr)
-        lc = load_lightcone(lightcone_step_fname, shear_step_fname)
+        lc = load_lightcone(lightcone_step_fname, shear_step_fname, fake_shears)
         lcs.append(lc)
         ss = load_snapshot(snapshot_galaxy_fname.replace("${step}",str(step)))
         output_fname = lightcone_output_fname.replace("${step}",str(step))
