@@ -1334,7 +1334,6 @@ def plot_differences(lc_data, gal_prop, index):
     for key in keys:
         slct_fnt = np.isfinite(dist[key])
         bins = np.linspace(np.min(dist[key][slct_fnt]), np.max(dist[key][slct_fnt]), 100)
-        print(bins)
         h,xbins = np.histogram(dist[key][slct_fnt],bins=bins)
         plt.plot(dtk.bins_avg(xbins),h,label=key)
     plt.yscale('log')
@@ -1399,6 +1398,29 @@ def plot_side_by_side(lc_data, gal_prop, index, x='Mag_r'):
         axs[2].set_title('Galacticus ')
         axs[2].set_xlabel(x)
         axs[2].set_ylabel(key)
+        
+    fig,axs = plt.subplots(1,3,sharey=True,sharex=True,figsize=(15,5))
+    h,xbins,ybins = np.histogram2d(lc_data['clr_gr'],lc_data['clr_ri'],bins=(100,100))
+    axs[0].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    axs[0].grid()
+    axs[0].set_title('UMachine + SDSS')
+    axs[0].set_xlabel('clr_gr')
+    axs[0].set_ylabel('clr_ri')
+    
+    h,xbins,ybins = np.histogram2d(gal_prop['clr_gr'][index],gal_prop['clr_ri'][index],bins=(xbins,ybins))
+    axs[1].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    axs[1].grid()
+    axs[1].set_title('Matched Galacticus')
+    axs[1].set_xlabel('clr_gr')
+    axs[1].set_ylabel('clr_ri')
+    
+    h,xbins,ybins = np.histogram2d(gal_prop['clr_gr'],gal_prop['clr_ri'],bins=(xbins,ybins))
+    axs[2].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+    axs[2].grid()
+    axs[2].set_title('Galacticus ')
+    axs[2].set_xlabel('clr_gr')
+    axs[2].set_ylabel('clr_ri')
+        
     return
 
 
@@ -1408,7 +1430,6 @@ def plot_mag_r(lc_data,gal_prop,index):
     slct_fnt_gp = np.isfinite(gal_prop['Mag_r'][index])
     max_r = np.max((np.max(lc_data['Mag_r'][slct_fnt_lc]),np.max(gal_prop['Mag_r'][index][slct_fnt_gp])))
     min_r = np.min((np.min(lc_data['Mag_r'][slct_fnt_lc]),np.min(gal_prop['Mag_r'][index][slct_fnt_gp])))
-    print(min_r,max_r)
     bins = np.linspace(min_r,max_r,100)
     h_lc,_ = np.histogram(lc_data['Mag_r'][slct_fnt_lc],bins=bins)
     h_mg,_ = np.histogram(gal_prop['Mag_r'][index][slct_fnt_gp],bins=bins)
@@ -1719,14 +1740,15 @@ if __name__ == "__main__":
                     # all matches have 1.0 dust factor since aren't applying extra dust factors
                     match_dust_factors[slct_lc_abin] = 1.0
                 if plot_substep:
-                    plot_differences(lc_data_a, gal_prop_a, index_abin)
-                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin)
-                    plot_side_by_side(lc_data_a, gal_prop_a, index_abin)
-                    mag_bins = (-21,-20,-19)
-                    plot_mag_r(lc_data_a, gal_prop_a, index_abin)
-                    plot_clr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color')
+                    print("subplots")
+                    plot_differences(lc_data_a, gal_prop_a, index_abin);print("subplots")
+                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin);print("subplots")
+                    plot_side_by_side(lc_data_a, gal_prop_a, index_abin);print("subplots")
+                    mag_bins = (-21,-20,-19);print("subplots")
+                    plot_mag_r(lc_data_a, gal_prop_a, index_abin);print("subplots")
+                    plot_clr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color');print("subplots")
                     #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
-                    plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins)
+                    plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);print("subplots")
                     plt.show()
                     # h_in_gp = h5py.File(gltcs_step_fname,'r')['galaxyProperties']
                     # h_in_slope_gp = h5py.File(gltcs_slope_step_fname,'r')['galaxyProperties']
