@@ -372,7 +372,10 @@ def construct_lc_data(fname,verbose = False, recolor=False):
         # plt.pcolor(xbins,ybins, h.T, cmap='PuBu', norm =clr.LogNorm())
         # plt.grid()
         # plt.show()
-        lc_data['Mag_r'], lc_data['clr_gr'], lc_data['clr_ri'] = [a,b,c]
+        lc_data['Mag_r'] = a 
+        lc_data['clr_gr'] = b
+        lc_data['clr_ri'] = c
+        #lc_data['Mag_r'], lc_data['clr_gr'], lc_data['clr_ri'] = [a,b,c]
         
     if verbose:
         print('done loading lc data. {}'.format(time.time()-t1))
@@ -403,17 +406,20 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     mag_r  = lc_data['Mag_r']
     clr_gr = lc_data['clr_gr']
     clr_ri = lc_data['clr_ri']
-    if not ignore_mstar:
+    print("ignore_mstar: ", ignore_mstar)
+    if ignore_mstar:
+        print("Ignoring Mstar!")
+        lc_mat = np.stack((mag_r,clr_gr,clr_ri),axis=1)
+        gal_mat = np.stack((gal_prop['Mag_r'],
+                            gal_prop['clr_gr'],
+                            gal_prop['clr_ri']),axis=1)
+    else:
         lc_mat = np.stack((m_star,mag_r,clr_gr,clr_ri),axis=1)
         gal_mat = np.stack((gal_prop['m_star'],
                             gal_prop['Mag_r'],
                             gal_prop['clr_gr'],
                             gal_prop['clr_ri']),axis=1)
-    else:
-        lc_mat = np.stack((mag_r,clr_gr,clr_ri),axis=1)
-        gal_mat = np.stack((gal_prop['Mag_r'],
-                            gal_prop['clr_gr'],
-                            gal_prop['clr_ri']),axis=1)
+
     if verbose:
         t2 = time.time()
         print('\tdone formating data. {}'.format(t2-t1))
@@ -1693,7 +1699,7 @@ if __name__ == "__main__":
                                                                         verbose = verbose,
                                                                         mask = mask1)
                 # Find the closest Galacticus galaxy
-                index_abin = resample_index(lc_data_a, gal_prop_a, verbose = verbose)
+                index_abin = resample_index(lc_data_a, gal_prop_a, ignore_mstar = ignore_mstar, verbose = verbose)
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
                     # offset the index for the extra dust gal_prop 
@@ -1775,6 +1781,7 @@ if __name__ == "__main__":
             else:
                 gal_prop = gal_prop_simple
                 mask = mask_simple
+            print("mstar before call: ", ignore_mstar)
             index = resample_index(lc_data, gal_prop, ignore_mstar = ignore_mstar, verbose = verbose)
 
             if plot:
