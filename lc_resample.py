@@ -796,7 +796,7 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     return
 
 
-def overwrite_columns(input_fname, output_fname, verbose=False):
+def overwrite_columns(input_fname, output_fname, ignore_mstar = False, verbose=False):
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
@@ -824,6 +824,13 @@ def overwrite_columns(input_fname, output_fname, verbose=False):
     h_out_gp['vz']=vz
     h_out_gp['lightcone_rotation'] = h_in['lightcone_rotation'].value
     h_out_gp['lightcone_replication'] = h_in['lightcone_replication'].value
+    if ignore_mstar:
+        print("Ignoring M* in stellar mass assignment!")
+        # m*_delta = M*_new/M*_old
+        mstar_delta = h_in['obs_sm'].value/h_out_gp['totalMassStellar'].value
+        h_out_gp['totalMassStellar'][:] = h_out_gp['totalMassStellar'].value*mstar_delta
+        h_out_gp['diskMassStellar'][:] = h_out_gp['diskMassStellar'].value*mstar_delta
+        h_out_gp['spheroidMassStellar'][:] = h_out_gp['spheroidMassStellar'].value*mstar_delta
     t3 = time.time()
     if verbose:
         print("\t done overwriting xyz, v_(xyz)",t3-t2)
@@ -1850,7 +1857,7 @@ if __name__ == "__main__":
             else:
                 copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
    
-        overwrite_columns(lightcone_step_fname, output_step_loc, verbose = verbose)
+        overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar, verbose = verbose)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
         add_native_umachine(output_step_loc, lightcone_step_fname)
         add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
