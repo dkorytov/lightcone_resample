@@ -20,7 +20,10 @@ from scipy.interpolate import interp1d
 from cosmodc2.black_hole_modeling import monte_carlo_bh_acc_rate, bh_mass_from_bulge_mass, monte_carlo_black_hole_mass
 from cosmodc2.size_modeling import mc_size_vs_luminosity_late_type, mc_size_vs_luminosity_early_type
 from cosmodc2.sdss_colors import assign_restframe_sdss_gri
+from cosmodc2.mock_diagnostics import mean_des_red_sequence_gr_color_vs_redshift, mean_des_red_sequence_ri_color_vs_redshift, mean_des_red_sequence_iz_color_vs_redshift
+
 import galmatcher
+
 
 def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     t1 = time.time()
@@ -221,7 +224,10 @@ def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=F
     return gal_prop,mask
 
 
-def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, mask1, mask2, dust_factor = 1.0):
+def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, mask1, mask2, 
+                                         dust_factor = 1.0, 
+                                         match_obs_color_red_seq = False, 
+                                         cut_small_galaxies_mass = None):
     """Constructs gal_prop using the interpolation scheme from the galacticus
     snapshots and index matching galaxies in step2 to galaxies in step1. 
     """
@@ -258,6 +264,36 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
     gal_prop['clr_ri'] = mag_r - mag_i
     gal_prop['dust_factor'] = np.ones(size, dtype='f4')*dust_factor
     gal_prop['index']  = np.arange(size, dtype='i8')
+    if match_obs_color_red_seq:
+        lum_g_obs = get_column_interpolation_dust_raw(
+            'SDSS_filters/totalLuminositiesStellar:SDSS_g:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_r_obs = get_column_interpolation_dust_raw(
+            'SDSS_filters/totalLuminositiesStellar:SDSS_r:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_i_obs = get_column_interpolation_dust_raw(
+            'SDSS_filters/totalLuminositiesStellar:SDSS_i:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_z_obs = get_column_interpolation_dust_raw(
+            'SDSS_filters/totalLuminositiesStellar:SDSS_z:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        # Luminosity distance factors cancle when we compute galaxy color, 
+        # so I'm not including them the magnitude calculation
+        mag_g_obs = -2.5*np.log10(lum_g_obs)
+        mag_r_obs = -2.5*np.log10(lum_r_obs)
+        mag_i_obs = -2.5*np.log10(lum_i_obs)
+        mag_z_obs = -2.5*np.log10(lum_z_obs)
+        gal_prop['clr_gr_obs'] = mag_g_obs - mag_r_obs
+        gal_prop['clr_ri_obs'] = mag_r_obs - mag_i_obs
+        gal_prop['clr_iz_obs'] = mag_i_obs - mag_z_obs
+    if not (cut_small_galaxies_mass is None):
+        print("cutting out small galaxies in gltcs")
+        slct_gal = gal_prop['m_star']>cut_small_galaxies_mass
+        gal_prop = dic_select(gal_prop, slct_gal)
     # print("nan test")
     # print(np.sum(np.isnan(gal_prop['m_star'])))
     # print("not finite test")
@@ -333,15 +369,11 @@ def construct_many_gal_prop_redshift_dust(fname, slope_fname, snap_a, target_a_l
     return gal_prop_list,mask
 
 
-def construct_lc_data(fname,verbose = False, recolor=False):
+def construct_lc_data(fname, match_obs_color_red_seq = False, 
+                      verbose = False, recolor=False, cut_small_galaxies_mass = None):
     t1 = time.time()
     lc_data = {}
-    #tbl = Table.read(fname,path='data')
     hfile = h5py.File(fname,'r')
-    # lc_data['m_star'] = np.log10(sdss['obs_sm'].quantity)
-    # lc_data['Mag_r']  = sdss['rmag'].quantity
-    # lc_data['clr_gr'] = sdss['sdss_petrosian_gr'].quantity
-    # lc_data['clr_ri'] = sdss['sdss_petrosian_ri'].quantity
     lc_data['m_star'] = np.log10(hfile['obs_sm'].value)
     lc_data['Mag_r'] = hfile['restframe_extincted_sdss_abs_magr'].value
     lc_data['clr_gr'] = hfile['restframe_extincted_sdss_gr'].value
@@ -353,7 +385,7 @@ def construct_lc_data(fname,verbose = False, recolor=False):
         upid_mock = hfile['upid'].value
         mstar_mock = hfile['obs_sm'].value
         sfr_percentile_mock = hfile['sfr_percentile'].value
-        host_halo_mvir_mock = hfile['host_halo_mvir'].value
+        host_halo_mvir_mock = hfile['host_halo_mvir'].value    
         redshift_mock = lc_data['redshift']
         a,b,c = assign_restframe_sdss_gri(upid_mock, mstar_mock, sfr_percentile_mock,
                                           host_halo_mvir_mock, redshift_mock)
@@ -376,7 +408,22 @@ def construct_lc_data(fname,verbose = False, recolor=False):
         lc_data['clr_gr'] = b
         lc_data['clr_ri'] = c
         #lc_data['Mag_r'], lc_data['clr_gr'], lc_data['clr_ri'] = [a,b,c]
-        
+    if match_obs_color_red_seq:
+        print("match obs color red seq")
+        host_halo_mvir_mock = hfile['host_halo_mvir'].value    
+        is_on_red_seq_gr = hfile['is_on_red_sequence_gr'].value
+        is_on_red_seq_ri = hfile['is_on_red_sequence_ri'].value
+        print("lc host halo mvir: ",host_halo_mvir_mock)
+        lc_data['is_cluster_red_sequence'] = (np.log10(host_halo_mvir_mock) > 13.5) & is_on_red_seq_gr & is_on_red_seq_ri
+        print(np.sum(lc_data['is_cluster_red_sequence']), '/', lc_data['is_cluster_red_sequence'].size)
+        lc_data['clr_gr_obs'] = mean_des_red_sequence_gr_color_vs_redshift(lc_data['redshift'])
+        lc_data['clr_ri_obs'] = mean_des_red_sequence_ri_color_vs_redshift(lc_data['redshift'])
+        lc_data['clr_iz_obs'] = mean_des_red_sequence_iz_color_vs_redshift(lc_data['redshift'])
+    if not (cut_small_galaxies_mass is None):
+        print("cutting out small galaxies!")
+        # Cutting out low mass galaxies so it runs fasters
+        slct_gals = lc_data['m_star']>cut_small_galaxies_mass
+        lc_data = dic_select(lc_data, slct_gals)
     if verbose:
         print('done loading lc data. {}'.format(time.time()-t1))
     return lc_data
@@ -437,21 +484,53 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
         aa = np.arange(dist.shape[0])
         #dist = dist[aa,rand]
         index = index[aa,rand]
-    # print("distance: ",dist)
-    # print("gal_mat")
-    # print("{:20} {:20} {:20} {:20}".format("mstar", "MagR","g-r", "r-i"))
-    # for i in range(0,20):
-    #     print("{:20} {:20} {:20} {:20}".format(gal_mat[i,0], gal_mat[i,1], gal_mat[i,2], gal_mat[i,3]))
-    # print("lc_mat")
-    # print("{:20} {:20} {:20} {:20}".format("mstar", "MagR","g-r", "r-i"))
-    # for i in range(0,20):
-    #     print("{:20} {:20} {:20} {:20}".format(lc_mat[i,0], lc_mat[i,1], lc_mat[i,2], lc_mat[i,3]))
-    # print("index: ")
-    # for i in range(0,20):
-    #     print(index[i])
     return index
-                                
+   
 
+def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = False):
+    if verbose:
+        t1 = time.time()
+        print("Starting kdtree resampling with obs colors")
+    lc_data_list = []
+    gal_prop_list = []
+    if ignore_mstar:
+        pass
+    else:
+        lc_data_list.append(lc_data['m_star'])
+        gal_prop_list.append(gal_prop['m_star'])
+    lc_data_list += (lc_data['Mag_r'],
+                     lc_data['clr_gr'],
+                     lc_data['clr_ri'],
+                     lc_data['clr_gr_obs'],
+                     lc_data['clr_ri_obs'],
+                     lc_data['clr_iz_obs'])
+    gal_prop_list += (gal_prop['Mag_r'],
+                      gal_prop['clr_gr'],
+                      gal_prop['clr_ri'],
+                      gal_prop['clr_gr_obs'],
+                      gal_prop['clr_ri_obs'],
+                      gal_prop['clr_iz_obs'])
+    lc_mat = np.transpose(lc_data_list)
+    gal_mat = np.transpose(gal_prop_list)
+    if verbose:
+        t2 = time.time()
+        print("\tdone formatting data. {}".format(t2-t1))
+    ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = False)
+    if verbose:
+        t3 = time.time()
+        print("\tdone making kdtree. {}".format(t3-t2))
+    dist, index = ckdtree.query(lc_mat, nnk, n_jobs=10)
+    if verbose:
+        t4 = time.time()
+        print("\tdone querying. {}".format(t4-t3))
+    if nnk > 1:
+        rand = np.random.randint(nnk,size=dist.shape[0])
+        aa = np.arange(dist.shape[0])
+        #dist = dist[aa,rand]
+        index = index[aa,rand]
+    return index
+
+        
 def get_keys(hgroup):
     keys = []
     def _collect_keys(name, obj):
@@ -796,12 +875,18 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     return
 
 
-def overwrite_columns(input_fname, output_fname, ignore_mstar = False, verbose=False):
+def overwrite_columns(input_fname, output_fname, ignore_mstar = False, 
+                      verbose=False, cut_small_galaxies_mass = None):
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
         #sdss = Table.read(input_fname,path='data')
     h_in = h5py.File(input_fname,'r')
+    sm = h_in['obs_sm'].value
+    if cut_small_galaxies_mass is None:
+        mask = np.ones(sm.size, dtype=bool)
+    else: 
+        mask = np.log10(sm) > cut_small_galaxies_mass
     #redshift = np.ones(sdss['x'].quantity.size)*0.1
     h_out = h5py.File(output_fname, 'a')
     h_out_gp = h_out['galaxyProperties']
@@ -809,25 +894,25 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False, verbose=F
     if verbose:
         print("\t done reading in data", t2-t1)
     #xyz,v(xyz)
-    x = h_in['x'].value
-    y = h_in['y'].value
-    z = h_in['z'].value
-    vx = h_in['vx'].value
-    vy = h_in['vy'].value
-    vz = h_in['vz'].value
-    redshift  =h_in['redshift'].value
+    x = h_in['x'].value[mask]
+    y = h_in['y'].value[mask]
+    z = h_in['z'].value[mask]
+    vx = h_in['vx'].value[mask]
+    vy = h_in['vy'].value[mask]
+    vz = h_in['vz'].value[mask]
+    redshift  =h_in['redshift'].value[mask]
     h_out_gp['x']=x
     h_out_gp['y']=y
     h_out_gp['z']=z
     h_out_gp['vx']=vx
     h_out_gp['vy']=vy
     h_out_gp['vz']=vz
-    h_out_gp['lightcone_rotation'] = h_in['lightcone_rotation'].value
-    h_out_gp['lightcone_replication'] = h_in['lightcone_replication'].value
+    h_out_gp['lightcone_rotation'] = h_in['lightcone_rotation'].value[mask]
+    h_out_gp['lightcone_replication'] = h_in['lightcone_replication'].value[mask]
     if ignore_mstar:
         print("Ignoring M* in stellar mass assignment!")
         # m*_delta = M*_new/M*_old
-        mstar_delta = h_in['obs_sm'].value/h_out_gp['totalMassStellar'].value
+        mstar_delta = h_in['obs_sm'].value[mask]/h_out_gp['totalMassStellar'].value
         h_out_gp['totalMassStellar'][:] = h_out_gp['totalMassStellar'].value*mstar_delta
         h_out_gp['diskMassStellar'][:] = h_out_gp['diskMassStellar'].value*mstar_delta
         h_out_gp['spheroidMassStellar'][:] = h_out_gp['spheroidMassStellar'].value*mstar_delta
@@ -840,6 +925,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False, verbose=F
     #obs mag
     #Calculate the oringal redshift 
     stepz = dtk.StepZ(200,0,500)
+    # Precompute redshfit to luminosity distance relationship
     zs = np.linspace(0,1.5,1000)
     z_to_dl = interp1d(zs,cosmo.luminosity_distance(zs))
     dl = z_to_dl(redshift)
@@ -879,19 +965,19 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False, verbose=F
     #redshift
     h_out_gp['redshift'] = z_obs
     h_out_gp['redshiftHubble'] = redshift
-    h_out_gp['ra_true'] = h_in['ra'].value
-    h_out_gp['dec_true'] = h_in['dec'].value
-    h_out_gp['ra'] = h_in['ra_lensed'].value
-    h_out_gp['dec'] = h_in['dec_lensed'].value
-    h_out_gp['shear1'] = h_in['shear1'].value
-    h_out_gp['shear2'] = h_in['shear2'].value
-    h_out_gp['magnification'] = h_in['magnification'].value
-    h_out_gp['convergence'] = h_in['convergence'].value
-    central = (h_in['host_centric_x'].value ==0) & (h_in['host_centric_y'].value ==0) & (h_in['host_centric_z'].value == 0)
+    h_out_gp['ra_true'] = h_in['ra'].value[mask]
+    h_out_gp['dec_true'] = h_in['dec'].value[mask]
+    h_out_gp['ra'] = h_in['ra_lensed'].value[mask]
+    h_out_gp['dec'] = h_in['dec_lensed'].value[mask]
+    h_out_gp['shear1'] = h_in['shear1'].value[mask]
+    h_out_gp['shear2'] = h_in['shear2'].value[mask]
+    h_out_gp['magnification'] = h_in['magnification'].value[mask]
+    h_out_gp['convergence'] = h_in['convergence'].value[mask]
+    central = (h_in['host_centric_x'].value ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
     h_out_gp['isCentral'] = central
-    h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value
-    h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value
-    unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
+    h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value[mask]
+    h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value[mask]
+    unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value[mask], return_inverse=True, return_counts = True)
     h_out_gp['NumberSelected'] = cnt[indx]
     tf = time.time()
     if verbose:
@@ -1617,6 +1703,7 @@ def plot_gal_prop_dist(gal_props, gal_props_names):
 
 if __name__ == "__main__":
     t00 = time.time()
+    # Loading in all the parameters from the parameter file
     param = dtk.Param(sys.argv[1])
     lightcone_fname = param.get_string('lightcone_fname')
     gltcs_fname = param.get_string('gltcs_fname')
@@ -1628,31 +1715,45 @@ if __name__ == "__main__":
     output_fname = param.get_string('output_fname')
     steps = param.get_int_list('steps')
     use_slope = param.get_bool('use_slope')
-    short = param.get_bool('short')
-    supershort = param.get_bool('supershort')
     substeps = param.get_int('substeps')
     use_substep_redshift = param.get_bool('use_substep_redshift')
     load_mask = param.get_bool("load_mask")
     mask_loc  = param.get_string("mask_loc")
     index_loc = param.get_string("index_loc")
     recolor = param.get_bool('recolor')
+    short = param.get_bool('short')
+    supershort = param.get_bool('supershort')
+    cut_small_galaxies = param.get_bool('cut_small_galaxies')
+    cut_small_galaxies_mass = param.get_float('cut_small_galaxies_mass')
     plot = param.get_bool('plot')
     plot_substep = param.get_bool('plot_substep')
     use_dust_factor = param.get_bool('use_dust_factor')
     dust_factors = param.get_float_list('dust_factors')
     ignore_mstar = param.get_bool('ignore_mstar')
+    match_obs_color_red_seq = param.get_bool('match_obs_color_red_seq')
     version_major = param.get_int('version_major')
     version_minor = param.get_int('version_minor')
     version_minor_minor = param.get_int('version_minor_minor')
+    # The other options are depricated
+    assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
+    if not cut_small_galaxies: # if we don't cut out small galaxies, set the mass limit
+        cut_small_galaxies_mass = None # to None as a flag for other parts in the code
+    # Load Eve's galmatcher mask. Another script writes the mask to file (Need to check which one)
     if load_mask:
         hfile_mask = h5py.File(mask_loc,'r')
     else:
         selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
         selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
+    # This object converts simulation steps into redshift or scale factor
     stepz = dtk.StepZ(200,0,500)
-    output_step_list = []
+    output_step_list = [] # A running list of the output genereated for each time step. 
+    # After all the steps run, the files are concatenated into one file. 
     step_size = steps.size
     for i in range(0,step_size-1):
+        # Since the interpolation scheme needs to know the earlier and later time step
+        # that are interpolated between, we iterate over all pairs of steps. The outputs
+        # are are labeled with the earlier time step i.e. the interpolation between 487
+        # and 475 are output is labeled with 475
         t0 = time.time()
         step = steps[i+1]
         step2 = steps[i]
@@ -1680,7 +1781,10 @@ if __name__ == "__main__":
         #The index remap galaxies in step2 to the same order as they were in step1
         index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1']
         verbose = True
-        lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor)
+        # Load the mock (UMachine + Color + Shear) into dict of arrays. 
+        lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor, 
+                                    match_obs_color_red_seq = match_obs_color_red_seq,
+                                    cut_small_galaxies_mass = cut_small_galaxies_mass)
         if(use_slope):
             print("using slope", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
@@ -1716,7 +1820,8 @@ if __name__ == "__main__":
                         #                                                          dust_factor=dust_factor)
                         gal_prop_tmp2 = construct_gal_prop_redshift_dust_raw(
                             gltcs_fname, index_2to1, step, step2, abins_avg[k],
-                            mask1, mask2, dust_factor)
+                            mask1, mask2, dust_factor, match_obs_color_red_seq,
+                            cut_small_galaxies_mass = cut_small_galaxies_mass)
                         # plot_gal_prop_dist([gal_prop_tmp, gal_prop_tmp2], ["old method", "new method"])
                         # plt.show()
                         gal_prop_list.append(gal_prop_tmp2)
@@ -1728,6 +1833,18 @@ if __name__ == "__main__":
                                                                         mask = mask1)
                 # Find the closest Galacticus galaxy
                 index_abin = resample_index(lc_data_a, gal_prop_a, ignore_mstar = ignore_mstar, verbose = verbose)
+                #If we are matching on observed colors for cluster red seqence guys:
+                if match_obs_color_red_seq:
+                    #Create a lc_data with only cluster red sequence galaxies
+                    slct_clstr_red_squence = lc_data_a['is_cluster_red_sequence']
+                    lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_squence)
+                    # Find the closest Galacticus galaxy as before but also match on 
+                    # observed g-r, r-i, and i-z colors
+                    index_abin_crs = resample_index_cluster_red_squence(
+                        lc_data_a_crs, gal_prop_a, 
+                        ignore_mstar = ignore_mstar,
+                        verbose = verbose)
+                    index_abin[slct_clstr_red_squence] = index_abin_crs
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
                     # offset the index for the extra dust gal_prop 
@@ -1857,7 +1974,8 @@ if __name__ == "__main__":
             else:
                 copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
    
-        overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar, verbose = verbose)
+        overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
+                          verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass )
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
         add_native_umachine(output_step_loc, lightcone_step_fname)
         add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
