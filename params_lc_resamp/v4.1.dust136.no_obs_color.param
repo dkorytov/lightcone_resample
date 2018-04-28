@@ -9,7 +9,7 @@ sod_fname /cosmo/homes/dkorytov/data/AlphaQ/M200/STEP${step}/m000-${step}.sodpro
 steps    487      475      464      453      442      432      421      411      401      392      382      373      365      355      347      338      331      323      315      307      300      293      286      279      272      266      259      253      247
 
 
-output_fname  /cosmo/homes/dkorytov/data/cosmoDC2/protoDC2_v4.1/v4.1/v4.1.dust136.${step}.hdf5
+output_fname  /cosmo/homes/dkorytov/data/cosmoDC2/protoDC2_v4.1/v4.1/v4.1.dust136.no_obs_color.${step}.hdf5
 
 load_mask true
 mask_loc output/masks/mask.hdf5
@@ -30,7 +30,7 @@ dust_factors 3.0 6.0
 
 
 ignore_mstar True
-match_obs_color_red_seq true
+match_obs_color_red_seq false
 
 plot      false
 plot_substep false
