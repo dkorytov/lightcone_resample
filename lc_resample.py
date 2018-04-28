@@ -973,11 +973,11 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     h_out_gp['shear2'] = h_in['shear2'].value[mask]
     h_out_gp['magnification'] = h_in['magnification'].value[mask]
     h_out_gp['convergence'] = h_in['convergence'].value[mask]
-    central = (h_in['host_centric_x'].value ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
+    central = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
     h_out_gp['isCentral'] = central
     h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value[mask]
     h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value[mask]
-    unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value[mask], return_inverse=True, return_counts = True)
+    unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
     h_out_gp['NumberSelected'] = cnt[indx]
     tf = time.time()
     if verbose:
