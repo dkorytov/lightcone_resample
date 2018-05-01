@@ -1451,6 +1451,47 @@ def plot_differences(lc_data, gal_prop, index):
     return
 
 
+def plot_differences_obs_color(lc_data, gal_prop, index):
+    slct = lc_data['is_cluster_red_sequence']
+    keys = ['Mag_r','clr_gr','clr_ri', 'clr_gr_obs', 'clr_ri_obs', 'clr_iz_obs']
+    dist = {}
+    dist_all = None
+    for key in keys:
+        d = lc_data[key][slct]-gal_prop[key][index][slct]
+        dist[key] = d
+        if(dist_all is None):
+            dist_all = d*d
+        else:
+            dist_all += d*d
+    dist_all = np.sqrt(dist_all)
+    plt.figure()
+    for key in keys:
+        slct_fnt = np.isfinite(dist[key])
+        bins = np.linspace(np.min(dist[key][slct_fnt]), np.max(dist[key][slct_fnt]), 100)
+        h,xbins = np.histogram(dist[key][slct_fnt],bins=bins)
+        plt.plot(dtk.bins_avg(xbins),h,label=key)
+    plt.yscale('log')
+    plt.grid()
+    plt.legend(loc='best')
+    plt.xlabel('original value - matched value')
+    plt.ylabel('count')
+    plt.figure()
+    slct_fnt = np.isfinite(dist_all)
+    bins = np.linspace(np.min(dist_all[slct_fnt]), np.max(dist_all[slct_fnt]), 100)
+    for key in keys:
+        slct_fnt = np.isfinite(dist[key])
+        h,xbins = np.histogram(dist[key][slct_fnt],bins=xbins)
+        plt.plot(dtk.bins_avg(xbins),h,label=key)
+    h,xbins = np.histogram(dist_all[slct_fnt],bins=bins)
+    plt.plot(dtk.bins_avg(xbins),h,label='all',lw=2.0)
+    plt.yscale('log')
+    plt.grid()
+    plt.legend(loc='best')
+    plt.xlabel('distance in match')
+    plt.ylabel('count')
+    return
+
+
 def plot_differences_2d(lc_data, gal_prop,index, x='Mag_r'):
     keys = ['Mag_r','clr_gr','clr_ri','m_star']
     for key in keys:
@@ -1864,28 +1905,16 @@ if __name__ == "__main__":
                     # all matches have 1.0 dust factor since aren't applying extra dust factors
                     match_dust_factors[slct_lc_abin] = 1.0
                 if plot_substep:
-                    print("subplots")
-                    plot_differences(lc_data_a, gal_prop_a, index_abin);print("subplots")
-                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin);print("subplots")
-                    plot_side_by_side(lc_data_a, gal_prop_a, index_abin);print("subplots")
-                    mag_bins = (-21,-20,-19);print("subplots")
-                    plot_mag_r(lc_data_a, gal_prop_a, index_abin);print("subplots")
-                    plot_clr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color');print("subplots")
+                    plot_difference(slc_data_a, gal_prop_a, index_abin);
+                    plot_differences_obs_colors(lc_data_a, gal_prop_a, index_abin);
+                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin);
+                    plot_side_by_side(lc_data_a, gal_prop_a, index_abin);
+                    mag_bins = (-21,-20,-19);
+                    plot_mag_r(lc_data_a, gal_prop_a, index_abin);
+                    plot_clr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color');
                     #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
-                    plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);print("subplots")
+                    plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);
                     plt.show()
-                    # h_in_gp = h5py.File(gltcs_step_fname,'r')['galaxyProperties']
-                    # h_in_slope_gp = h5py.File(gltcs_slope_step_fname,'r')['galaxyProperties']
-                    # del_a = lc_a-step_a
-                    # lum_g = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
-                    # lum_r = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
-                    # lum_i = get_column_slope_dust("SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
-                    # sm = get_column_slope_dust("totalMassStellar", h_in_gp, h_in_slope_gp, index, del_a, mask1, match_dust_factors)
-                    # mag_g = -2.5*np.log10(lum_g)
-                    # mag_r = -2.5*np.log10(lum_r)
-                    # mag_i = -2.5*np.log10(lum_i)
-                    # clr_gr = mag_g-mag_r
-                    # clr_ri = mag_r-mag_i
                     
             slct_neg = index == -1
             print(match_dust_factors)
