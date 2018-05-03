@@ -1127,12 +1127,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     return
 
    
-def add_native_umachine(output_fname, umachine_native):
+def add_native_umachine(output_fname, umachine_native, cut_small_galaxies_mass = None):
     t1 = time.time()
     h_in = h5py.File(umachine_native,'r')
     hgroup = h5py.File(output_fname, 'r+')['galaxyProperties']
-    for key in h_in.keys():
-           hgroup['UMachineNative/'+key] = h_in[key].value
+    if cut_small_galaxies_mass is None:
+        for key in h_in.keys():
+            hgroup['UMachineNative/'+key] = h_in[key].value
+    else:
+        sm = h_in['obs_sm'].value # in linear units
+        slct = sm > 10**cut_small_galaxies_mass #convert cut_small.. from log to linear
+        for key in h_in.keys():
+            hgroup['UMachineNative/'+key] = h_in[key].value[slct]
     print("done addign umachine quantities. time: {:.2f}".format(time.time()-t1))
     return
  
@@ -1741,7 +1747,6 @@ def plot_gal_prop_dist(gal_props, gal_props_names):
         axs[i].set_ylabel('clr_ri')
     
 
-
 if __name__ == "__main__":
     t00 = time.time()
     # Loading in all the parameters from the parameter file
@@ -2006,7 +2011,7 @@ if __name__ == "__main__":
         overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
                           verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass )
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
-        add_native_umachine(output_step_loc, lightcone_step_fname)
+        add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass)
         add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
         add_size_quantities(output_step_loc)
         add_ellipticity_quantities(output_step_loc)
