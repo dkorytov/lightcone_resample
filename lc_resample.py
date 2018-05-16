@@ -1,5 +1,8 @@
 #!/usr/bin/env python2.7
 from __future__ import print_function, division
+import sys
+
+sys.path.insert(0, '/homes/dkorytov/.local/lib/python2.7/site-packages/halotools-0.7.dev4939-py2.7-linux-x86_64.egg')
 
 import numpy as np
 import scipy as sp
@@ -415,6 +418,7 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         is_on_red_seq_ri = hfile['is_on_red_sequence_ri'].value
         print("lc host halo mvir: ",host_halo_mvir_mock)
         lc_data['is_cluster_red_sequence'] = (np.log10(host_halo_mvir_mock) > 13.5) & is_on_red_seq_gr & is_on_red_seq_ri
+        #lc_data['is_cluster_red_sequence'] = is_on_red_seq_gr & is_on_red_seq_ri
         print(np.sum(lc_data['is_cluster_red_sequence']), '/', lc_data['is_cluster_red_sequence'].size)
         lc_data['clr_gr_obs'] = mean_des_red_sequence_gr_color_vs_redshift(lc_data['redshift'])
         lc_data['clr_ri_obs'] = mean_des_red_sequence_ri_color_vs_redshift(lc_data['redshift'])
@@ -447,6 +451,7 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling")
+        print("\n Num LC Galaxies: {:.2e} Num Gltcs Galaxies: {:.2e}".format(lc_data['m_star'].size, gal_prop['m_star'].size))
     # print("lc_data size: {}".format(lc_data['m_star'].size))
     # print("gal_prop size: {}".format(gal_prop['m_star'].size))
     m_star = lc_data['m_star']
@@ -470,8 +475,14 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     if verbose:
         t2 = time.time()
         print('\tdone formating data. {}'.format(t2-t1))
+        print(np.shape(gal_mat))
+    # if the search size is large enough, it's saves total time to construct a 
+    # faster to search tree. Otherwise build a quick tree. 
+    if m_star.size > 2.4e6: 
+        ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = True)
+    else:
+        ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = False)
 
-    ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = False)
     if verbose:
         t3 = time.time()
         print('\tdone making tree. {}'.format(t3-t2))
@@ -1481,6 +1492,7 @@ def plot_differences_obs_color(lc_data, gal_prop, index):
     plt.legend(loc='best')
     plt.xlabel('original value - matched value')
     plt.ylabel('count')
+
     plt.figure()
     slct_fnt = np.isfinite(dist_all)
     bins = np.linspace(np.min(dist_all[slct_fnt]), np.max(dist_all[slct_fnt]), 100)
@@ -1883,14 +1895,15 @@ if __name__ == "__main__":
                 if match_obs_color_red_seq:
                     #Create a lc_data with only cluster red sequence galaxies
                     slct_clstr_red_squence = lc_data_a['is_cluster_red_sequence']
-                    lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_squence)
-                    # Find the closest Galacticus galaxy as before but also match on 
-                    # observed g-r, r-i, and i-z colors
-                    index_abin_crs = resample_index_cluster_red_squence(
-                        lc_data_a_crs, gal_prop_a, 
-                        ignore_mstar = ignore_mstar,
-                        verbose = verbose)
-                    index_abin[slct_clstr_red_squence] = index_abin_crs
+                    if np.sum(slct_clstr_red_squence) > 0:
+                        lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_squence)
+                        # Find the closest Galacticus galaxy as before but also match on 
+                        # observed g-r, r-i, and i-z colors
+                        index_abin_crs = resample_index_cluster_red_squence(
+                            lc_data_a_crs, gal_prop_a, 
+                            ignore_mstar = ignore_mstar,
+                            verbose = verbose)
+                        index_abin[slct_clstr_red_squence] = index_abin_crs
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
                     # offset the index for the extra dust gal_prop 
@@ -1910,8 +1923,8 @@ if __name__ == "__main__":
                     # all matches have 1.0 dust factor since aren't applying extra dust factors
                     match_dust_factors[slct_lc_abin] = 1.0
                 if plot_substep:
-                    plot_difference(slc_data_a, gal_prop_a, index_abin);
-                    plot_differences_obs_colors(lc_data_a, gal_prop_a, index_abin);
+                    plot_differences(lc_data_a, gal_prop_a, index_abin);
+                    plot_differences_obs_color(lc_data_a, gal_prop_a, index_abin);
                     plot_differences_2d(lc_data_a, gal_prop_a, index_abin);
                     plot_side_by_side(lc_data_a, gal_prop_a, index_abin);
                     mag_bins = (-21,-20,-19);
