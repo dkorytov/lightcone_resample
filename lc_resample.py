@@ -24,8 +24,8 @@ from cosmodc2.black_hole_modeling import monte_carlo_bh_acc_rate, bh_mass_from_b
 from cosmodc2.size_modeling import mc_size_vs_luminosity_late_type, mc_size_vs_luminosity_early_type
 from cosmodc2.sdss_colors import assign_restframe_sdss_gri
 from cosmodc2.mock_diagnostics import mean_des_red_sequence_gr_color_vs_redshift, mean_des_red_sequence_ri_color_vs_redshift, mean_des_red_sequence_iz_color_vs_redshift
-
-import galmatcher
+from ellipticity_model import monte_carlo_ellipticity_bulge, monte_carlo_ellipticity_disk
+import galmatcher 
 
 
 def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
@@ -447,7 +447,9 @@ def select_by_index(data,index):
     return new_data
 
 
-def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = False):
+def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = False,
+                   ignore_bright_luminosity=False,
+                   ignore_bright_luminosity_threshold=False):
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling")
@@ -466,21 +468,30 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
                             gal_prop['clr_gr'],
                             gal_prop['clr_ri']),axis=1)
     else:
-        lc_mat = np.stack((m_star,mag_r,clr_gr,clr_ri),axis=1)
-        gal_mat = np.stack((gal_prop['m_star'],
-                            gal_prop['Mag_r'],
+        lc_mat = np.stack((mag_r,clr_gr,clr_ri,m_star),axis=1)
+        gal_mat = np.stack((gal_prop['Mag_r'],
                             gal_prop['clr_gr'],
-                            gal_prop['clr_ri']),axis=1)
-
+                            gal_prop['clr_ri'],
+                            gal_prop['m_star']),axis=1)
+    if ignore_bright_luminosity:
+        slct_lc_mat = lc_mat[:,0]<ignore_bright_luminosity_threshold
+        lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
+        slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
+        gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
     if verbose:
         t2 = time.time()
         print('\tdone formating data. {}'.format(t2-t1))
-        print(np.shape(gal_mat))
+        print("data size: {:.2e}".format(m_star.size))
     # if the search size is large enough, it's saves total time to construct a 
     # faster to search tree. Otherwise build a quick tree. 
-    if m_star.size > 2.4e6: 
+
+    if m_star.size > 3e6: 
+        if verbose:
+            print("long tree")
         ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = True)
     else:
+        if verbose:
+            print("quick tree")
         ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = False)
 
     if verbose:
@@ -498,17 +509,15 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     return index
    
 
-def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = False):
+def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, nnk = 10, 
+                                       verbose = False,
+                                       ignore_bright_luminosity=False,
+                                       ignore_bright_luminosity_threshold=False):
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling with obs colors")
     lc_data_list = []
     gal_prop_list = []
-    if ignore_mstar:
-        pass
-    else:
-        lc_data_list.append(lc_data['m_star'])
-        gal_prop_list.append(gal_prop['m_star'])
     lc_data_list += (lc_data['Mag_r'],
                      lc_data['clr_gr'],
                      lc_data['clr_ri'],
@@ -521,8 +530,18 @@ def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, 
                       gal_prop['clr_gr_obs'],
                       gal_prop['clr_ri_obs'],
                       gal_prop['clr_iz_obs'])
+    if ignore_mstar:
+        pass
+    else:
+        lc_data_list.append(lc_data['m_star'])
+        gal_prop_list.append(gal_prop['m_star'])
     lc_mat = np.transpose(lc_data_list)
     gal_mat = np.transpose(gal_prop_list)
+    if ignore_bright_luminosity:
+        slct_lc_mat = lc_mat[:,0]<ignore_bright_luminosity_threshold
+        lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
+        slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
+        gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
     if verbose:
         t2 = time.time()
         print("\tdone formatting data. {}".format(t2-t1))
@@ -555,7 +574,7 @@ copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshi
                'redshiftHubble','placementType','isCentral','hostIndex', 
                'blackHoleAccretionRate','blackHoleMass')
 copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle')
-no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
+no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle', 'step')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
 def to_copy(key, short, supershort):
@@ -730,7 +749,10 @@ def get_column_slope_dust(key, h_in_gp, h_in_slope_gp, index, del_a, mask = None
     return new_data
 
 
-def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors, kdtree_index=None):
+# Keys that have their luminosity adjusted
+luminosity_factors_keys = ['Luminosities', 'Luminosity']
+def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors, kdtree_index=None, 
+                                      luminosity_factors = None):
     """This function returns the interpolated quantity between two
     timesteps, from step1 to step2. Some galaxies are masked out: Any
     galaxy that doesn't pass the mask in step1 (mask1), any galaxy
@@ -738,7 +760,9 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
     descendent doesn't pass the step2 mask (mask2).
 
     """
-    print("\tLoading key: {}".format(key), end="")
+    print("\tLoading key: {}".format(key))
+    if luminosity_factors is None:
+        print("\t\tluminosity factors is none")
     #print("dust_factors: ", dust_factors)
     t1 = time.time()
     step_del_a = step2_a - step1_a
@@ -747,7 +771,15 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
     # step1, galaxies that don't have a descndent, or if the
     # descendent galaxy at step2 doesn't pass galmatcher requirements.
     mask_tot = mask1 & (index != -1) & mask2[index]
-    if ":dustAtlas" in key:
+    if (key in no_slope_var) or any(ptrn in key for ptrn in no_slope_ptrn):
+        print('\t\tno interpolation')
+        data = h_in_gp1[key].value[mask_tot]
+        if kdtree_index is None:
+            val_out = data
+        else:
+            val_out = data[kdtree_index]
+    elif ":dustAtlas" in key:
+        print('\t\tinterpolation with dust')
         key_no_dust = key.replace(":dustAtlas","")
         val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
         val1_dust = h_in_gp1[key].value[mask_tot]
@@ -762,6 +794,7 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
             val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*(dust_effect[kdtree_index]**dust_factors)
             #val_out = 10**(val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a + dust_effect[kdtree_index]*dust_factor)
     else:
+        print('\t\tinerpolation without dust')
         val1_data = h_in_gp1[key].value[mask_tot]
         val2_data = h_in_gp2[key].value[index][mask_tot]
         slope = (val2_data - val1_data)/step_del_a
@@ -769,13 +802,22 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
             val_out = val1_data + slope*target_del_a
         else:
             val_out = val1_data[kdtree_index] + slope[kdtree_index]*target_del_a
-    if(val_out.dtype == np.float64):
-        val_out = val_out.astype(np.float32)
+    print('\t\t',val_out.dtype)
+    if not(luminosity_factors is None):
+        if(any(l in key for l in luminosity_factors_keys)):
+            print("\t\tluminosity adjusted")
+            val_out = val_out*luminosity_factors
+        elif('Luminosities' in key or 'Luminosity' in key):
+            print("\t\tluminosity adjusted 2")
+            val_out = val_out*luminosity_factors
+        else:
+            print("\t\tluminosity untouched")
+    print("\t\toutput size: {:.2e}".format(val_out.size))
     print("\t\tread + format time: {}".format(time.time()-t1))
     return val_out
 
 
-def get_func_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors=1.0):
+def get_func_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors=1.0, luminosity_factors = 1.0):
     """Returns the constants required to reconstruct the column at any redshift between 
     the interpolation steps. The return values are val0, slope0 and dust_effect0 for the
     function val(z, dust) = (val0 + slope0*del_a)*(dust_effect0**dust_factor)
@@ -851,7 +893,8 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
                                         index_2to1, lc_a, 
                                         verbose = False, 
                                         short = False, supershort = False, 
-                                        step = -1, dust_factors = 1.0):
+                                        step = -1, dust_factors = 1.0,
+                                        luminosity_factors = None):
     print("===================================")
     print("copy columns interpolation dust raw")
     # lc_a = 1.0/(1.0+lc_redshift)
@@ -875,7 +918,7 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
             print('{}/{} [{}] {}'.format(i,len(keys),step, key))
         new_data = get_column_interpolation_dust_raw(
             key, h_in_gp1, h_in_gp2, index_2to1, mask1, mask2, step1_a, step2_a, lc_a, dust_factors, 
-            kdtree_index = kdtree_index)
+            kdtree_index = kdtree_index, luminosity_factors = luminosity_factors)
         slct_finite = np.isfinite(new_data)
         #If the data is a double, record it as a float to save on disk space
         if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
@@ -932,7 +975,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         print("\t done overwriting xyz, v_(xyz)",t3-t2)
     #peculiar velocity
     _,z_obs,v_pec,_,_,_,_ = pecZ(x,y,z,vx,vy,vz,redshift)
-    h_out_gp['peculiarVelocity'] = v_pec
+    h_out_gp['peculiarVelocity'] = np.array(v_pec, dtype='f4')
     #obs mag
     #Calculate the oringal redshift 
     stepz = dtk.StepZ(200,0,500)
@@ -948,12 +991,12 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         if("totalLuminositiesStellar" in key and  ":observed" in key and ("SDSS" in key or "LSST" in key)):
             new_key = key.replace("totalLuminositiesStellar",'magnitude',1)
             print("making: "+new_key+" from "+key)
-            h_out_gp[new_key]=adjust_mag -2.5*np.log10(h_out_gp[key].value)
+            h_out_gp[new_key]=np.array(adjust_mag -2.5*np.log10(h_out_gp[key].value), dtype='f4')
         # Calculating new rest frame magnitudes
         if("totalLuminositiesStellar" in key and  ":rest" in key and ("SDSS" in key or "LSST" in key)):
             new_key = key.replace("totalLuminositiesStellar","magnitude",1)
             print("making: "+new_key+" from "+key)
-            h_out_gp[new_key]=-2.5*np.log10(h_out_gp[key].value)
+            h_out_gp[new_key]=np.array(-2.5*np.log10(h_out_gp[key].value), dtype='f4')
 
     # redshift_org = h_out_gp['redshiftHubble'].value
 
@@ -1037,7 +1080,7 @@ def rotate_host_halo(rot, x,y,z):
     return
 
 
-def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_loc, verbose=False):
+def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_step_loc, verbose=False):
     hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
 
     halo_tag = hgroup['hostHaloTag'].value
@@ -1065,18 +1108,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_lo
     print("num selected: ",np.sum(slct_indx))
     
 
-    eg_cat_eg1 = np.zeros(size)
-    eg_cat_eg2 = np.zeros(size)
-    eg_cat_eg3 = np.zeros(size)
-    eg_cat_eg1_x =np.zeros(size)
-    eg_cat_eg1_y =np.zeros(size)
-    eg_cat_eg1_z =np.zeros(size)
-    eg_cat_eg2_x =np.zeros(size)
-    eg_cat_eg2_y =np.zeros(size)
-    eg_cat_eg2_z =np.zeros(size)
-    eg_cat_eg3_x = np.zeros(size)
-    eg_cat_eg3_y =np.zeros(size)
-    eg_cat_eg3_z =np.zeros(size)
+    eg_cat_eg1 = np.zeros(size,dtype='f4')
+    eg_cat_eg2 = np.zeros(size,dtype='f4')
+    eg_cat_eg3 = np.zeros(size,dtype='f4')
+    eg_cat_eg1_x =np.zeros(size,dtype='f4')
+    eg_cat_eg1_y =np.zeros(size,dtype='f4')
+    eg_cat_eg1_z =np.zeros(size,dtype='f4')
+    eg_cat_eg2_x =np.zeros(size,dtype='f4')
+    eg_cat_eg2_y =np.zeros(size,dtype='f4')
+    eg_cat_eg2_z =np.zeros(size,dtype='f4')
+    eg_cat_eg3_x = np.zeros(size,dtype='f4')
+    eg_cat_eg3_y =np.zeros(size,dtype='f4')
+    eg_cat_eg3_z =np.zeros(size,dtype='f4')
 
     eg_cat_eg1[slct_indx] = dtk.gio_read(halo_shape_loc,'eval1')[indx_slct]
     eg_cat_eg2[slct_indx] = dtk.gio_read(halo_shape_loc,'eval2')[indx_slct]
@@ -1178,7 +1221,35 @@ def add_size_quantities(output_fname):
     hgroup['morphology/diskHalfLightRadiusArcsec'] = size_disk*f
 
 
-def add_ellipticity_quantities(output_fname):
+def erase_ellipticity_quantities(output_fname):
+    print(output_fname)
+    def erase_if_has(hfile, output_fname):
+        if 'galaxyProperties/'+output_fname in hfile:
+            del hfile['galaxyProperties/'+output_fname]
+    hfile = h5py.File(output_fname,'r+')
+    erase_if_has(hfile, 'morphology/spheroidAxisRatio')
+    erase_if_has(hfile, 'morphology/spheroidAxisRatio')
+    erase_if_has(hfile, 'morphology/spheroidMajorAxisArcsec')
+    erase_if_has(hfile, 'morphology/spheroidMinorAxisArcsec')
+    erase_if_has(hfile, 'morphology/spheroidEllipticity') 
+    erase_if_has(hfile, 'morphology/spheroidEllipticity1')
+    erase_if_has(hfile, 'morphology/spheroidEllipticity2')
+    erase_if_has(hfile, 'morphology/diskAxisRatio')
+    erase_if_has(hfile, 'morphology/diskMajorAxisArcsec') 
+    erase_if_has(hfile, 'morphology/diskMinorAxisArcsec') 
+    erase_if_has(hfile, 'morphology/diskEllipticity') 
+    erase_if_has(hfile, 'morphology/diskEllipticity1')
+    erase_if_has(hfile, 'morphology/diskEllipticity2')
+    erase_if_has(hfile, 'morphology/totalEllipticity')  
+    erase_if_has(hfile, 'morphology/totalAxisRatio')    
+    erase_if_has(hfile, 'morphology/totalEllipticity1') 
+    erase_if_has(hfile, 'morphology/totalEllipticity2') 
+    erase_if_has(hfile, 'morphology/positionAngle') 
+
+
+def add_ellipticity_quantities(output_fname, verbose = False):
+    if verbose:
+        print("\tadding ellipticity")
     def gal_zoo_dist(x):
         val = np.zeros_like(x)
         a = 2
@@ -1195,44 +1266,54 @@ def add_ellipticity_quantities(output_fname):
         val[slct] = 0
         return val
     hgroup = h5py.File(output_fname, 'r+')['galaxyProperties']
-    inclination = hgroup['morphology/inclination'].value
-    del hgroup['morphology/inclination']
+    if 'inclination' in hgroup['morphology']:
+        inclination = hgroup['morphology/inclination'].value
+    else:
+        inclination = None
+    mag_r = hgroup['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
+
     size = np.size(inclination)
     pos_angle = np.random.uniform(size=size)*np.pi
-
-    spheroid_axis_ratio = dtk.clipped_gaussian(0.8, 0.2, size, max_val = 1.0, min_val=0.0)
-    dist,lim = dtk.make_distribution(-inclination)
-    resamp = dtk.resample_distribution(dist,gal_zoo_dist,lim,[0.0,1.0])
-
-
+    if False: # Old code for ellipticity
+        spheroid_axis_ratio = dtk.clipped_gaussian(0.8, 0.2, size, max_val = 1.0, min_val=0.0)
+        dist,lim = dtk.make_distribution(-inclination)
+        resamp = dtk.resample_distribution(dist,gal_zoo_dist,lim,[0.0,1.0])
+        disk_axis_ratio = resamp(-inclination)
+    else:
+        # Returns ellip = 1-q^2 / 1+q^2
+        spheroid_ellip_cosmo = monte_carlo_ellipticity_bulge(mag_r)
+        disk_ellip_cosmo = monte_carlo_ellipticity_disk(mag_r, inclination)
+        # We need to convert to q = sqrt((1-e)/(1+e))
+        spheroid_axis_ratio = np.sqrt((1-spheroid_ellip_cosmo)/(1+spheroid_ellip_cosmo))
+        disk_axis_ratio = np.sqrt((1-disk_ellip_cosmo)/(1+disk_ellip_cosmo))
+    # Calculate ellipticity from the axis ratios
+    ellip_disk = (1.0 - disk_axis_ratio)/(1.0 + disk_axis_ratio)
     ellip_spheroid = (1.0 - spheroid_axis_ratio)/(1.0 + spheroid_axis_ratio)
 
-    hgroup['morphology/spheroidAxisRatio'] = spheroid_axis_ratio
-    hgroup['morphology/spheroidMajorAxisArcsec'] = hgroup['morphology/spheroidHalfLightRadiusArcsec'].value
-    hgroup['morphology/spheroidMinorAxisArcsec'] = hgroup['morphology/spheroidHalfLightRadiusArcsec'].value*spheroid_axis_ratio
-    hgroup['morphology/spheroidEllipticity'] = ellip_spheroid
-    hgroup['morphology/spheroidEllipticity1'] = np.cos(2.0*pos_angle)*ellip_spheroid
-    hgroup['morphology/spheroidEllipticity2'] = np.sin(2.0*pos_angle)*ellip_spheroid
+    hgroup['morphology/spheroidAxisRatio'] = np.array(spheroid_axis_ratio, dtype='f4')
+    hgroup['morphology/spheroidMajorAxisArcsec'] = np.array(hgroup['morphology/spheroidHalfLightRadiusArcsec'].value, dtype='f4')
+    hgroup['morphology/spheroidMinorAxisArcsec'] = np.array(hgroup['morphology/spheroidHalfLightRadiusArcsec'].value*spheroid_axis_ratio, dtype='f4')
+    hgroup['morphology/spheroidEllipticity'] = np.array(ellip_spheroid, dtype='f4')
+    hgroup['morphology/spheroidEllipticity1'] =np.array( np.cos(2.0*pos_angle)*ellip_spheroid, dtype='f4')
+    hgroup['morphology/spheroidEllipticity2'] =np.array( np.sin(2.0*pos_angle)*ellip_spheroid, dtype='f4')
 
-    disk_axis_ratio = resamp(-inclination)
-    ellip_disk = (1.0 - disk_axis_ratio)/(1.0 + disk_axis_ratio)
-    hgroup['morphology/diskAxisRatio'] = disk_axis_ratio
-    hgroup['morphology/diskMajorAxisArcsec'] = hgroup['morphology/diskHalfLightRadiusArcsec'].value
-    hgroup['morphology/diskMinorAxisArcsec'] = hgroup['morphology/diskHalfLightRadiusArcsec'].value*disk_axis_ratio
-    hgroup['morphology/diskEllipticity'] = ellip_disk
-    hgroup['morphology/diskEllipticity1'] = np.cos(2.0*pos_angle)*ellip_disk
-    hgroup['morphology/diskEllipticity2'] = np.sin(2.0*pos_angle)*ellip_disk
+    hgroup['morphology/diskAxisRatio'] = np.array(disk_axis_ratio, dtype='f4')
+    hgroup['morphology/diskMajorAxisArcsec'] = np.array(hgroup['morphology/diskHalfLightRadiusArcsec'].value, dtype='f4')
+    hgroup['morphology/diskMinorAxisArcsec'] = np.array(hgroup['morphology/diskHalfLightRadiusArcsec'].value*disk_axis_ratio, dtype='f4')
+    hgroup['morphology/diskEllipticity'] = np.array(ellip_disk, dtype='f4')
+    hgroup['morphology/diskEllipticity1'] =np.array( np.cos(2.0*pos_angle)*ellip_disk, dtype='f4')
+    hgroup['morphology/diskEllipticity2'] =np.array( np.sin(2.0*pos_angle)*ellip_disk, dtype='f4')
 
     lum_disk = hgroup['SDSS_filters/diskLuminositiesStellar:SDSS_r:rest'].value
     lum_sphere = hgroup['SDSS_filters/spheroidLuminositiesStellar:SDSS_r:rest'].value
     lum_tot = lum_disk + lum_sphere
     tot_ellip =  (lum_disk*ellip_disk + lum_sphere*ellip_spheroid)/(lum_tot)
-    hgroup['morphology/totalEllipticity']  = tot_ellip
-    hgroup['morphology/totalAxisRatio']    = (1.0 - tot_ellip)/(1.0 + tot_ellip)
-    hgroup['morphology/totalEllipticity1'] = np.cos(2.0*pos_angle)*tot_ellip
-    hgroup['morphology/totalEllipticity2'] = np.sin(2.0*pos_angle)*tot_ellip
-    
-    hgroup['morphology/positionAngle'] = pos_angle*180.0/np.pi
+    hgroup['morphology/totalEllipticity']  = np.array(tot_ellip, dtype='f4')
+    hgroup['morphology/totalAxisRatio']    = np.array((1.0 - tot_ellip)/(1.0 + tot_ellip), dtype='f4')
+    hgroup['morphology/totalEllipticity1'] = np.array(np.cos(2.0*pos_angle)*tot_ellip, dtype='f4')
+    hgroup['morphology/totalEllipticity2'] = np.array(np.sin(2.0*pos_angle)*tot_ellip, dtype='f4')
+    hgroup['morphology/positionAngle'] = np.array(pos_angle*180.0/np.pi, dtype='f4')
+    return
 
 
 def combine_step_lc_into_one(step_fname_list, out_fname):
@@ -1334,6 +1415,7 @@ def add_units(out_fname):
     print( keys)
     for key in keys:
         print(key)
+        print('\t',hfile[key].dtype)
         #add magnitude units
         if(any(l in key for l in mag_list)):
             hfile[key].attrs['units']=mag_unit
@@ -1759,10 +1841,10 @@ def plot_gal_prop_dist(gal_props, gal_props_names):
         axs[i].set_ylabel('clr_ri')
     
 
-if __name__ == "__main__":
+def lightcone_resample(param_file_name):
     t00 = time.time()
     # Loading in all the parameters from the parameter file
-    param = dtk.Param(sys.argv[1])
+    param = dtk.Param(param_file_name)
     lightcone_fname = param.get_string('lightcone_fname')
     gltcs_fname = param.get_string('gltcs_fname')
     gltcs_metadata_ref = param.get_string('gltcs_metadata_ref')
@@ -1789,6 +1871,11 @@ if __name__ == "__main__":
     dust_factors = param.get_float_list('dust_factors')
     ignore_mstar = param.get_bool('ignore_mstar')
     match_obs_color_red_seq = param.get_bool('match_obs_color_red_seq')
+    rescale_bright_luminosity = param.get_bool('rescale_bright_luminosity')
+    rescale_bright_luminosity_threshold = param.get_float('rescale_bright_luminosity_threshold')
+    ignore_bright_luminosity = param.get_bool('ignore_bright_luminosity')
+    ignore_bright_luminosity_threshold = param.get_float('ignore_bright_luminosity_threshold')
+
     version_major = param.get_int('version_major')
     version_minor = param.get_int('version_minor')
     version_minor_minor = param.get_int('version_minor_minor')
@@ -1856,6 +1943,7 @@ if __name__ == "__main__":
             abins_avg = dtk.bins_avg(abins)
             index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
             match_dust_factors = -1*np.ones(lc_data['redshift'].size,dtype='i4')
+            match_luminosity_factors = -1*np.ones(lc_data['redshift'].size,dtype='f4')
             for k in range(0,abins_avg.size):
                 print("\t{}/{} substeps".format(k,abins_avg.size))
                 slct_lc_abins1 = (abins[k]<=lc_a) 
@@ -1890,7 +1978,11 @@ if __name__ == "__main__":
                                                                         verbose = verbose,
                                                                         mask = mask1)
                 # Find the closest Galacticus galaxy
-                index_abin = resample_index(lc_data_a, gal_prop_a, ignore_mstar = ignore_mstar, verbose = verbose)
+                index_abin = resample_index(lc_data_a, gal_prop_a, 
+                                            ignore_mstar = ignore_mstar, 
+                                            verbose = verbose, 
+                                            ignore_bright_luminosity=ignore_bright_luminosity, 
+                                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold)
                 #If we are matching on observed colors for cluster red seqence guys:
                 if match_obs_color_red_seq:
                     #Create a lc_data with only cluster red sequence galaxies
@@ -1902,7 +1994,9 @@ if __name__ == "__main__":
                         index_abin_crs = resample_index_cluster_red_squence(
                             lc_data_a_crs, gal_prop_a, 
                             ignore_mstar = ignore_mstar,
-                            verbose = verbose)
+                            verbose = verbose,
+                            ignore_bright_luminosity=ignore_bright_luminosity,
+                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold)
                         index_abin[slct_clstr_red_squence] = index_abin_crs
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
@@ -1922,6 +2016,18 @@ if __name__ == "__main__":
                     index[slct_lc_abin] = index_abin
                     # all matches have 1.0 dust factor since aren't applying extra dust factors
                     match_dust_factors[slct_lc_abin] = 1.0
+                # By default use the same Galacticus luminosity
+                match_luminosity_factors[slct_lc_abin] = 1.0
+                # For the brightest galaxies, adjust all luminosities by the same factor
+                # so that the r-band matches
+                if rescale_bright_luminosity:
+                    slct_rescale_galaxies = lc_data_a['Mag_r'] < rescale_bright_luminosity_threshold
+                    if np.sum(slct_rescale_galaxies) > 0:
+                        print("num bright galaxies to rescale luminosity: {}".format(np.sum(slct_rescale_galaxies)))
+                        tmp = 10**((-lc_data_a['Mag_r'][slct_rescale_galaxies] + gal_prop_a['Mag_r'][index_abin][slct_rescale_galaxies])/2.5)
+                        slct_tmp = np.copy(slct_lc_abin)
+                        slct_tmp[slct_lc_abin]=slct_rescale_galaxies
+                        match_luminosity_factors[slct_tmp]=tmp
                 if plot_substep:
                     plot_differences(lc_data_a, gal_prop_a, index_abin);
                     plot_differences_obs_color(lc_data_a, gal_prop_a, index_abin);
@@ -1949,7 +2055,8 @@ if __name__ == "__main__":
                                                 step, step2, step_a, step2_a, mask1, mask2, 
                                                 index_2to1, lc_a_cc, verbose = verbose,
                                                 short = short, supershort = supershort,
-                                                    dust_factors = match_dust_factors, step = step)
+                                                    dust_factors = match_dust_factors, step = step,
+                                                    luminosity_factors = match_luminosity_factors)
             else:
                 copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
                                    output_step_loc, index, 
@@ -2045,7 +2152,7 @@ if __name__ == "__main__":
             # plt.plot(new_gal_prop['m_star'][index], new_gal_prop['m_star'],'.',alpha=0.3)
             mag_bins = (-21,-20,-19)
             plot_differences(lc_data, new_gal_prop, index)
-#            plot_differences_2d(lc_data_a, new_gal_prop, index)
+            plot_differences_2d(lc_data, new_gal_prop, index)
             plot_side_by_side(lc_data, new_gal_prop, index)
             plot_mag_r(lc_data, new_gal_prop, index)
             plot_side_by_side(lc_data, new_gal_prop, index)
@@ -2059,3 +2166,7 @@ if __name__ == "__main__":
     combine_step_lc_into_one(output_step_list, output_all)
     add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor)
     print("\n\n========\nALL DONE. Answer correct. \ntime: {:.2f}".format(time.time()-t00))
+
+
+if __name__ == "__main__":
+    lightcone_resample(sys.argv[1])
