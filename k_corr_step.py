@@ -140,8 +140,9 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file, output_i
         hfile_out = h5py.File(output_file,'w')
         hfile_out['match_2to1'] = match_2to1
         if verbose:
-            print("wrote index to file. time: {:f.2}".format(time.time()-t6))
-            print("Step done. Time: {:f.2}".format(time.time()-t1))
+            print("wrote index to file. time: {:.2f}".format(time.time()-t6))
+            print("num matches: {:.2e}".format(np.sum(match_2to1 != -1)))
+            print("Step done. Time: {:.2f}".format(time.time()-t1))
         return
     #Now we have found all galaxies from step1 in step2--stored in match_1to2
     #Next is to iterrate over all the filters and calculate the rate of change going from
@@ -298,6 +299,7 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file, output_i
 
         # plt.show()
     return 
+
 
 if __name__ == "__main__2":
     print("finding the k-corr for glctcs")
