@@ -13,6 +13,8 @@ import pdb
 from scipy.stats import binned_statistic_2d
 from numpy.random import normal
 
+from cosmodc2.mock_diagnostics import mean_des_red_sequence_gr_color_vs_redshift, mean_des_red_sequence_ri_color_vs_redshift, mean_des_red_sequence_iz_color_vs_redshift
+
 def plot_clr_clr(v3_data, key1, key2, title):
     plt.figure()
     bins = np.linspace(-1,2,100)
@@ -22,6 +24,7 @@ def plot_clr_clr(v3_data, key1, key2, title):
     plt.xlabel('g-r')
     plt.ylabel('r-i')
     plt.title(title)
+
 
 def plot_clr_z_dist(protoDC2, y_key, dist_keys):
     fig, axs = plt.subplots(2,2)
@@ -39,7 +42,8 @@ def plot_clr_z_dist(protoDC2, y_key, dist_keys):
         ax.grid()
         ax.set_title(dist_key)
 
-def load_protoDC2(fname):
+
+def load_protoDC2(fname, cut_small_galaixes):
     t1 = time.time()
     print "loading protodc2...",
     hgroup = h5py.File(fname,'r')['galaxyProperties']
@@ -79,15 +83,21 @@ def load_protoDC2(fname):
     result['um g-r rest'] = um_clr_gr
     result['um r-i rest'] = um_clr_ri
     result['um sm'] = um_sm
-    
-    result['dist r'] = result['mag r rest'] -um_mag_r
-    result['dist g-r'] = result['g-r rest'] -  um_clr_gr 
-    result['dist r-i'] =  result['r-i rest'] - um_clr_ri
-    result['dist sm'] =  result['sm'] - um_sm
-    result['dist'] = np.sqrt(result['dist r']**2    + result['dist g-r']**2 
+    red_seq = hgroup['UMachineNative/is_on_red_sequence_gr'].value & hgroup['UMachineNative/is_on_red_sequence_ri'].value 
+    host_halo_mvir = hgroup['UMachineNative/host_halo_mvir'].value > 10**13.5
+    result['um clstr red seq'] = red_seq & host_halo_mvir
+    if cut_small_galaxies == 0:
+        print(um_mag_r.size)
+        print(result['mag r rest'].size)
+        result['dist r'] = result['mag r rest'] -um_mag_r
+        result['dist g-r'] = result['g-r rest'] -  um_clr_gr 
+        result['dist r-i'] =  result['r-i rest'] - um_clr_ri
+        result['dist sm'] =  result['sm'] - um_sm
+        result['dist'] = np.sqrt(result['dist r']**2    + result['dist g-r']**2 
                              + result['dist r-i']**2 + result['dist sm']**2)
     print "\n\ttime: ",time.time() - t1
     return result
+
 
 def load_umachine(fname):
     hfile = h5py.File(fname,'r')
@@ -97,6 +107,7 @@ def load_umachine(fname):
     result['r-i'] = hfile['restframe_extincted_sdss_ri'].value
     result['redshift'] = hfile['redshift'].value
     return result
+
 
 def append_dics(dics):
     result = {}
@@ -117,6 +128,7 @@ if __name__ == "__main__":
     lightcone_fname = param.get_string("lightcone_fname")
     output_fname = param.get_string("output_fname")
     steps = param.get_int_list("steps")
+    cut_small_galaxies = param.get_bool('cut_small_galaxies')
     v1 = param.get_int("version_major")
     v2 = param.get_int("version_minor")
     v3 = param.get_int("version_minor_minor")
@@ -151,7 +163,7 @@ if __name__ == "__main__":
     # plt.grid()
 
     
-    protoDC2 = load_protoDC2(output_fname.replace("${step}","all"))
+    protoDC2 = load_protoDC2(output_fname.replace("${step}","all"), cut_small_galaxies)
     bins = np.linspace(-1,3,250)
     zbins = np.linspace(0,1,250)
     magobsbins = np.linspace(14,39,100)
@@ -172,6 +184,7 @@ if __name__ == "__main__":
         plt.grid()
         plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
 
+        # obs clr-z plots
         plt.figure()
         h,xbins,ybins = np.histogram2d(protoDC2['redshift'],protoDC2['g-r obs'],bins=(zbins,bins))
         plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
@@ -193,6 +206,66 @@ if __name__ == "__main__":
         plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
         plt.grid()
 
+        # Cluster red sequence clr-z plots
+        clr_bins2 = np.linspace(-0.5, 2, 250)
+        slct = protoDC2['um clstr red seq']
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(
+            protoDC2['redshift'][slct],
+            protoDC2['g-r obs'][slct],
+            bins=(zbins,clr_bins2))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.plot(xbins, 
+                 mean_des_red_sequence_gr_color_vs_redshift(xbins),'--k',
+                 label='DES fit')
+        plt.ylabel('g-r observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.legend(loc='best')
+        plt.grid()
+
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(
+            protoDC2['redshift'][slct],
+            protoDC2['r-i obs'][slct],
+            bins=(zbins,clr_bins2))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.plot(xbins, 
+                 mean_des_red_sequence_ri_color_vs_redshift(xbins),'--k',
+                 label='DES fit')
+        plt.ylabel('r-i observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.legend(loc='best')
+        plt.grid()
+
+        plt.figure()
+        plt.plot(protoDC2['redshift'][slct],
+                 protoDC2['r-i obs'][slct],
+                 'x',alpha=0.3)
+
+        plt.plot(xbins, 
+                 mean_des_red_sequence_ri_color_vs_redshift(xbins),'--k',
+                 label='DES fit')
+        plt.ylabel('r-i observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.legend(loc='best')
+        plt.grid()
+
+        plt.figure()
+        h,xbins,ybins = np.histogram2d(
+            protoDC2['redshift'][slct],
+            protoDC2['i-z obs'][slct],
+            bins=(zbins,clr_bins2))
+        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
+        plt.plot(xbins, 
+                 mean_des_red_sequence_iz_color_vs_redshift(xbins),'--k',
+                 label='DES fit')
+        plt.ylabel('i-z observed'); plt.xlabel('redshift')
+        plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
+        plt.legend(loc='best')
+        plt.grid()
+        
+
+        # Clr-clr rest frame
 
         plt.figure()
         h,xbins,ybins = np.histogram2d(protoDC2['g-r rest'],protoDC2['r-i rest'],bins=(clrclrbins,clrclrbins))
@@ -215,6 +288,8 @@ if __name__ == "__main__":
         plt.xlabel('r rest'); plt.ylabel('g-r rest')
         plt.title("ProtoDC2 v{}.{}.{}".format(v1,v2,v3))
         plt.grid()
+
+        # clr-clr obs frame
 
         slct = protoDC2['mag r rest']<-18
         plt.figure()
@@ -299,32 +374,32 @@ if __name__ == "__main__":
     plt.legend(loc='best')
     plt.yscale('log')
     plt.grid()
+    if cut_small_galaxies == 0:
+        plt.figure()
+        h, xbins, ybins = np.histogram2d(protoDC2['um mag r rest'], protoDC2['dist r'], bins = 250)
+        plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+        plt.xlabel('um mag r rest')
+        plt.ylabel('distance r (Galaticus - UMachine)')
+        
+        plt.figure()
+        h, xbins, ybins = np.histogram2d(protoDC2['um g-r rest'], protoDC2['dist g-r'], bins = 250)
+        plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+        plt.xlabel('um g-r rest')
+        plt.ylabel('distance g-r (Galaticus - UMachine)')
+        
+        plt.figure()
+        h, xbins, ybins = np.histogram2d(protoDC2['um r-i rest'], protoDC2['dist r-i'], bins = 250)
+        plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+        plt.xlabel('um r-i rest')
+        plt.ylabel('distance r-i (Galaticus - UMachine)')
+        
+        plt.figure()
+        h, xbins, ybins = np.histogram2d(protoDC2['um sm'], protoDC2['dist sm'], bins = 250)
+        plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
+        plt.xlabel('um sm')
+        plt.ylabel('distance sm (Galaticus - UMachine)')
 
-    plt.figure()
-    h, xbins, ybins = np.histogram2d(protoDC2['um mag r rest'], protoDC2['dist r'], bins = 250)
-    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
-    plt.xlabel('um mag r rest')
-    plt.ylabel('distance r (Galaticus - UMachine)')
-
-    plt.figure()
-    h, xbins, ybins = np.histogram2d(protoDC2['um g-r rest'], protoDC2['dist g-r'], bins = 250)
-    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
-    plt.xlabel('um g-r rest')
-    plt.ylabel('distance g-r (Galaticus - UMachine)')
-
-    plt.figure()
-    h, xbins, ybins = np.histogram2d(protoDC2['um r-i rest'], protoDC2['dist r-i'], bins = 250)
-    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
-    plt.xlabel('um r-i rest')
-    plt.ylabel('distance r-i (Galaticus - UMachine)')
-
-    plt.figure()
-    h, xbins, ybins = np.histogram2d(protoDC2['um sm'], protoDC2['dist sm'], bins = 250)
-    plt.pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
-    plt.xlabel('um sm')
-    plt.ylabel('distance sm (Galaticus - UMachine)')
-
-    dists = ['dist r', 'dist sm', 'dist g-r', 'dist r-i']
+        dists = ['dist r', 'dist sm', 'dist g-r', 'dist r-i']
     plot_clr_z_dist(protoDC2, 'g-r obs', dists)
     plot_clr_z_dist(protoDC2, 'r-i obs', dists)
     plot_clr_z_dist(protoDC2, 'i-z obs', dists)
@@ -367,6 +442,6 @@ if __name__ == "__main__":
 
 
     dtk.save_figs("figs/"+sys.argv[1]+"/"+__file__+"/")
-    plt.show()
+    #plt.show()
     
-    pdb.set_trace()
+    #pdb.set_trace()
