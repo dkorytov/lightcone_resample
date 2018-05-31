@@ -51,8 +51,6 @@ if __name__ == "__main__":
     t1 = time.time()
     hg = h5py.File(cat_loc,'r+')['galaxyProperties']
     cat_id = hg['UMachineNative/lightcone_id'].value
-    cat_sr1 = hg['UMachineNative/shear1'].value
-    cat_sr2 = hg['UMachineNative/shear1'].value
     print(cat_id.size)
     print(np.unique(cat_id).size)
     cat_step = hg['step'].value
