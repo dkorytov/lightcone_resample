@@ -24,7 +24,7 @@ from cosmodc2.black_hole_modeling import monte_carlo_bh_acc_rate, bh_mass_from_b
 from cosmodc2.size_modeling import mc_size_vs_luminosity_late_type, mc_size_vs_luminosity_early_type
 from cosmodc2.sdss_colors import assign_restframe_sdss_gri
 from cosmodc2.mock_diagnostics import mean_des_red_sequence_gr_color_vs_redshift, mean_des_red_sequence_ri_color_vs_redshift, mean_des_red_sequence_iz_color_vs_redshift
-from ellipticity_model import monte_carlo_ellipticity_bulge, monte_carlo_ellipticity_disk
+from ellipticity_model import monte_carlo_ellipticity_bulge_disk
 import galmatcher 
 
 
@@ -240,18 +240,34 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
     step1_a = stepz.get_a(step1)
     step2_a = stepz.get_a(step2)
     
-    lum_g = get_column_interpolation_dust_raw(
-        'SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas',
+    lum_g_d = get_column_interpolation_dust_raw(
+        'SDSS_filters/diskLuminositiesStellar:SDSS_g:rest:dustAtlas',
         h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
         target_a, dust_factor)
-    lum_r = get_column_interpolation_dust_raw(
-        'SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas',
+    lum_r_d = get_column_interpolation_dust_raw(
+        'SDSS_filters/diskLuminositiesStellar:SDSS_r:rest:dustAtlas',
         h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
         target_a, dust_factor)
-    lum_i = get_column_interpolation_dust_raw(
-        'SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas',
+    lum_i_d = get_column_interpolation_dust_raw(
+        'SDSS_filters/diskLuminositiesStellar:SDSS_i:rest:dustAtlas',
         h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
         target_a, dust_factor)
+    lum_g_b = get_column_interpolation_dust_raw(
+        'SDSS_filters/spheroidLuminositiesStellar:SDSS_g:rest:dustAtlas',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
+    lum_r_b = get_column_interpolation_dust_raw(
+        'SDSS_filters/spheroidLuminositiesStellar:SDSS_r:rest:dustAtlas',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
+    lum_i_b = get_column_interpolation_dust_raw(
+        'SDSS_filters/spheroidLuminositiesStellar:SDSS_i:rest:dustAtlas',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
+    lum_g = lum_g_d + lum_g_b
+    lum_i = lum_i_d + lum_i_b
+    lum_r = lum_r_d + lum_r_b
+
     m_star = get_column_interpolation_dust_raw(
         'totalMassStellar',
         h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
@@ -268,22 +284,42 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
     gal_prop['dust_factor'] = np.ones(size, dtype='f4')*dust_factor
     gal_prop['index']  = np.arange(size, dtype='i8')
     if match_obs_color_red_seq:
-        lum_g_obs = get_column_interpolation_dust_raw(
-            'SDSS_filters/totalLuminositiesStellar:SDSS_g:observed:dustAtlas',
+        lum_g_obs_d = get_column_interpolation_dust_raw(
+            'SDSS_filters/diskLuminositiesStellar:SDSS_g:observed:dustAtlas',
             h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
             target_a, dust_factor)
-        lum_r_obs = get_column_interpolation_dust_raw(
-            'SDSS_filters/totalLuminositiesStellar:SDSS_r:observed:dustAtlas',
+        lum_r_obs_d = get_column_interpolation_dust_raw(
+            'SDSS_filters/diskLuminositiesStellar:SDSS_r:observed:dustAtlas',
             h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
             target_a, dust_factor)
-        lum_i_obs = get_column_interpolation_dust_raw(
-            'SDSS_filters/totalLuminositiesStellar:SDSS_i:observed:dustAtlas',
+        lum_i_obs_d = get_column_interpolation_dust_raw(
+            'SDSS_filters/diskLuminositiesStellar:SDSS_i:observed:dustAtlas',
             h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
             target_a, dust_factor)
-        lum_z_obs = get_column_interpolation_dust_raw(
-            'SDSS_filters/totalLuminositiesStellar:SDSS_z:observed:dustAtlas',
+        lum_z_obs_d = get_column_interpolation_dust_raw(
+            'SDSS_filters/diskLuminositiesStellar:SDSS_z:observed:dustAtlas',
             h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
             target_a, dust_factor)
+        lum_g_obs_s = get_column_interpolation_dust_raw(
+            'SDSS_filters/spheroidLuminositiesStellar:SDSS_g:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_r_obs_s = get_column_interpolation_dust_raw(
+            'SDSS_filters/spheroidLuminositiesStellar:SDSS_r:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_i_obs_s = get_column_interpolation_dust_raw(
+            'SDSS_filters/spheroidLuminositiesStellar:SDSS_i:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_z_obs_s = get_column_interpolation_dust_raw(
+            'SDSS_filters/spheroidLuminositiesStellar:SDSS_z:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_g_obs = lum_g_obs_d + lum_g_obs_s
+        lum_r_obs = lum_r_obs_d + lum_r_obs_s
+        lum_i_obs = lum_i_obs_d + lum_i_obs_s
+        lum_z_obs = lum_z_obs_d + lum_z_obs_s
         # Luminosity distance factors cancle when we compute galaxy color, 
         # so I'm not including them the magnitude calculation
         mag_g_obs = -2.5*np.log10(lum_g_obs)
@@ -373,10 +409,14 @@ def construct_many_gal_prop_redshift_dust(fname, slope_fname, snap_a, target_a_l
 
 
 def construct_lc_data(fname, match_obs_color_red_seq = False, 
-                      verbose = False, recolor=False, cut_small_galaxies_mass = None):
+                      verbose = False, recolor=False, internal_step=None,
+                      cut_small_galaxies_mass = None):
     t1 = time.time()
     lc_data = {}
-    hfile = h5py.File(fname,'r')
+    if internal_step is None:
+        hfile = h5py.File(fname,'r')
+    else:
+        hfile = h5py.File(fname,'r')[str(internal_step)]
     lc_data['m_star'] = np.log10(hfile['obs_sm'].value)
     lc_data['Mag_r'] = hfile['restframe_extincted_sdss_abs_magr'].value
     lc_data['clr_gr'] = hfile['restframe_extincted_sdss_gr'].value
@@ -573,21 +613,21 @@ def get_keys(hgroup):
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
                'redshiftHubble','placementType','isCentral','hostIndex', 
                'blackHoleAccretionRate','blackHoleMass')
-copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle')
+copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total')
 no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle', 'step')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
 def to_copy(key, short, supershort):
     if short:
         if "LSST" in key or "SED" in key or "other" in key or "Lines" in key:
-            print("short: ",key)
+            print("\tnot copied: short var cut")
             return False
     if supershort:
         if "SDSS" not in key and "total" not in key and ":rest" not in key and "MassStellar" not in key and "infallIndex" != key and "inclination" not in key:
-            print("supershort: ", key)
+            print("\tnot copied: supershort var cut")
             return False
     if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
-        print("{} isn't copied".format(key))
+        print("\tnot copied: by explicit listing")
         return False
     return True
 
@@ -785,8 +825,10 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         val1_dust = h_in_gp1[key].value[mask_tot]
         val2_no_dust = h_in_gp2[key].value[index][mask_tot]
         dust_effect = val1_dust/val1_no_dust
+        dust_effect[val1_no_dust == 0] = 1
         #dust_effect = val1_dust - val1_no_dust
         slope = (val2_no_dust - val1_no_dust)/step_del_a
+        slope[step_del_a ==0] =0
         if kdtree_index is None:
             val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_factors)
             #val_out = 10**(val1_no_dust + slope*target_del_a + dust_effect*dust_factor)
@@ -798,6 +840,7 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         val1_data = h_in_gp1[key].value[mask_tot]
         val2_data = h_in_gp2[key].value[index][mask_tot]
         slope = (val2_data - val1_data)/step_del_a
+        slope[step_del_a==0]=0
         if kdtree_index is None:
             val_out = val1_data + slope*target_del_a
         else:
@@ -812,6 +855,16 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
             val_out = val_out*luminosity_factors
         else:
             print("\t\tluminosity untouched")
+    if np.sum(~np.isfinite(val_out))!=0:
+        print("{:.2e} {:.2e}".format(np.sum(~np.isfinite(val_out)), val_out.size))
+        print(np.sum(~np.isfinite(val1_no_dust)))
+        print(np.sum(~np.isfinite(dust_effect)))
+        slct = ~np.isfinite(dust_effect)
+        print(val1_no_dust[slct])
+        print(val1_dust[slct])
+        print(np.sum(~np.isfinite(slope)))
+        print(np.sum(~np.isfinite(target_del_a)))
+        exit()
     print("\t\toutput size: {:.2e}".format(val_out.size))
     print("\t\tread + format time: {}".format(time.time()-t1))
     return val_out
@@ -912,10 +965,10 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     for i in range(0,len(keys)):
         t1 = time.time()
         key = keys[i]
-        if not to_copy(key, short, supershort):
-            continue
         if verbose:
             print('{}/{} [{}] {}'.format(i,len(keys),step, key))
+        if not to_copy(key, short, supershort):
+            continue
         new_data = get_column_interpolation_dust_raw(
             key, h_in_gp1, h_in_gp2, index_2to1, mask1, mask2, step1_a, step2_a, lc_a, dust_factors, 
             kdtree_index = kdtree_index, luminosity_factors = luminosity_factors)
@@ -930,12 +983,16 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
 
 
 def overwrite_columns(input_fname, output_fname, ignore_mstar = False, 
-                      verbose=False, cut_small_galaxies_mass = None):
+                      verbose=False, cut_small_galaxies_mass = None, 
+                      internal_step=None, fake_lensing=False):
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
         #sdss = Table.read(input_fname,path='data')
-    h_in = h5py.File(input_fname,'r')
+    if internal_step is None:
+        h_in = h5py.File(input_fname,'r')
+    else:
+        h_in = h5py.File(input_fname,'r')[str(internal_step)]
     sm = h_in['obs_sm'].value
     if cut_small_galaxies_mass is None:
         mask = np.ones(sm.size, dtype=bool)
@@ -963,6 +1020,13 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     h_out_gp['vz']=vz
     h_out_gp['lightcone_rotation'] = h_in['lightcone_rotation'].value[mask]
     h_out_gp['lightcone_replication'] = h_in['lightcone_replication'].value[mask]
+    keys = get_keys(h_out_gp)
+    for key in keys:
+        if "spheroid" in key:
+            spheroid_key = key
+            disk_key = key.replace('spheroid','disk')
+            total_key = key.replace('spheroid','total')
+            h_out_gp[total_key] = np.array(h_out_gp[disk_key].value + h_out_gp[spheroid_key].value, dtype='f4')
     if ignore_mstar:
         print("Ignoring M* in stellar mass assignment!")
         # m*_delta = M*_new/M*_old
@@ -984,8 +1048,8 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     z_to_dl = interp1d(zs,cosmo.luminosity_distance(zs))
     dl = z_to_dl(redshift)
     adjust_mag = -2.5*np.log10(1.0+redshift)+5*np.log10(dl)+25.0
-    keys = get_keys(h_out_gp)
     t4 = time.time()
+    keys = get_keys(h_out_gp)
     for key in keys:
         # Calculating new observer frame magnitudes
         if("totalLuminositiesStellar" in key and  ":observed" in key and ("SDSS" in key or "LSST" in key)):
@@ -1021,12 +1085,22 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     h_out_gp['redshiftHubble'] = redshift
     h_out_gp['ra_true'] = h_in['ra'].value[mask]
     h_out_gp['dec_true'] = h_in['dec'].value[mask]
-    h_out_gp['ra'] = h_in['ra_lensed'].value[mask]
-    h_out_gp['dec'] = h_in['dec_lensed'].value[mask]
-    h_out_gp['shear1'] = h_in['shear1'].value[mask]
-    h_out_gp['shear2'] = h_in['shear2'].value[mask]
-    h_out_gp['magnification'] = h_in['magnification'].value[mask]
-    h_out_gp['convergence'] = h_in['convergence'].value[mask]
+    if fake_lensing:
+        size = h_in['ra'].size
+        h_out_gp['ra'] = h_in['ra'].value[mask]
+        h_out_gp['dec'] = h_in['dec'].value[mask]
+        h_out_gp['shear1'] = np.zeros(size, dtype='f4')
+        h_out_gp['shear2'] = np.zeros(size, dtype='f4')
+        h_out_gp['magnification'] = np.ones(size, dtype='f4')
+        h_out_gp['convergence'] = np.zeros(size, dtype='f4')
+    else:
+        h_out_gp['ra'] = h_in['ra_lensed'].value[mask]
+        h_out_gp['dec'] = h_in['dec_lensed'].value[mask]
+        h_out_gp['shear1'] = h_in['shear1'].value[mask]
+        h_out_gp['shear2'] = h_in['shear2'].value[mask]
+        h_out_gp['magnification'] = h_in['magnification'].value[mask]
+        h_out_gp['convergence'] = h_in['convergence'].value[mask]
+
     central = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
     h_out_gp['isCentral'] = central
     h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value[mask]
@@ -1181,9 +1255,13 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
     return
 
    
-def add_native_umachine(output_fname, umachine_native, cut_small_galaxies_mass = None):
+def add_native_umachine(output_fname, umachine_native, cut_small_galaxies_mass = None,
+                        internal_step=None):
     t1 = time.time()
-    h_in = h5py.File(umachine_native,'r')
+    if internal_step is None:
+        h_in = h5py.File(umachine_native,'r')
+    else:
+        h_in = h5py.File(umachine_native,'r')[str(internal_step)]
     hgroup = h5py.File(output_fname, 'r+')['galaxyProperties']
     if cut_small_galaxies_mass is None:
         for key in h_in.keys():
@@ -1281,11 +1359,12 @@ def add_ellipticity_quantities(output_fname, verbose = False):
         disk_axis_ratio = resamp(-inclination)
     else:
         # Returns ellip = 1-q^2 / 1+q^2
-        spheroid_ellip_cosmo = monte_carlo_ellipticity_bulge(mag_r)
-        disk_ellip_cosmo = monte_carlo_ellipticity_disk(mag_r, inclination)
+        # spheroid_ellip_cosmo = monte_carlo_ellipticity_bulge(mag_r)
+        # disk_ellip_cosmo = monte_carlo_ellipticity_disk(mag_r, inclination)
         # We need to convert to q = sqrt((1-e)/(1+e))
-        spheroid_axis_ratio = np.sqrt((1-spheroid_ellip_cosmo)/(1+spheroid_ellip_cosmo))
-        disk_axis_ratio = np.sqrt((1-disk_ellip_cosmo)/(1+disk_ellip_cosmo))
+        spheroid_ellip_cosmos, disk_ellip_cosmos = monte_carlo_ellipticity_bulge_disk(mag_r)
+        spheroid_axis_ratio = np.sqrt((1-spheroid_ellip_cosmos**2)/(1+spheroid_ellip_cosmos**2))
+        disk_axis_ratio = np.sqrt((1-disk_ellip_cosmos**2)/(1+disk_ellip_cosmos**2))
     # Calculate ellipticity from the axis ratios
     ellip_disk = (1.0 - disk_axis_ratio)/(1.0 + disk_axis_ratio)
     ellip_spheroid = (1.0 - spheroid_axis_ratio)/(1.0 + spheroid_axis_ratio)
@@ -1331,6 +1410,8 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
     for i,key in enumerate(keys):
         t1 = time.time()
         print("{}/{} {}".format(i,len(keys),key))
+        if key == 'inclination':
+            print('skipping in final output')
         data_list = []
         #units = None
         for h_gp in hfile_steps_gp:
@@ -1853,6 +1934,8 @@ def lightcone_resample(param_file_name):
     halo_shape_fname = param.get_string("halo_shape_fname")
     halo_shape_red_fname = param.get_string("halo_shape_red_fname")
     output_fname = param.get_string('output_fname')
+    heal_pix_file = param.get_bool('heal_pix_file')
+    fake_lensing  = param.get_bool('fake_lensing')
     steps = param.get_int_list('steps')
     use_slope = param.get_bool('use_slope')
     substeps = param.get_int('substeps')
@@ -1926,10 +2009,16 @@ def lightcone_resample(param_file_name):
         #The index remap galaxies in step2 to the same order as they were in step1
         index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1']
         verbose = True
+        # Healpix cutouts/files have the step saved inside of them.
+        if heal_pix_file:
+            internal_file_step = step
+        else:
+            internal_file_step = None
         # Load the mock (UMachine + Color + Shear) into dict of arrays. 
         lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor, 
                                     match_obs_color_red_seq = match_obs_color_red_seq,
-                                    cut_small_galaxies_mass = cut_small_galaxies_mass)
+                                    cut_small_galaxies_mass = cut_small_galaxies_mass, 
+                                    internal_step=internal_file_step)
         if(use_slope):
             print("using slope", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
@@ -2129,9 +2218,11 @@ def lightcone_resample(param_file_name):
                 copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
    
         overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
-                          verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass )
+                          verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                          internal_step = internal_file_step, fake_lensing=fake_lensing)
         overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
-        add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass)
+        add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                            internal_step = internal_file_step)
         add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
         add_size_quantities(output_step_loc)
         add_ellipticity_quantities(output_step_loc)
