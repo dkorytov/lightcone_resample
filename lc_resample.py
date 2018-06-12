@@ -473,6 +473,25 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
     return lc_data
 
 
+def construct_lc_data_healpix(fname, match_obs_color_red_seq = False, 
+                              verbose = False, recolor=False, internal_step=None,
+                              cut_small_galaxies_mass = None, healpixs=None):
+    if healpixs is None:
+        lc_data = construct_lc_data(fname, match_obs_color_red_seq = match_obs_color_red_seq,
+                                    verbose = verbose, recolor=recolor, internal_step = internal_step,
+                                    cut_small_galaxies_mass = cut_small_galaxies_mass)
+    else:
+        lc_data_hps = []
+        for healpix in healpixs:
+            lc_data_hp = construct_lc_data(fname, match_obs_color_red_seq = match_obs_color_red_seq,
+                                           verbose = verbose, recolor=recolor, internal_step = internal_step,
+                                           cut_small_galaxies_mass = cut_small_galaxies_mass)
+            lc_data_hp['healpix'] = np.ones(lc_data_hp['m_star'].size, dtype='i4')*healpix
+            lc_data_hps.append(lc_data_hp)
+        lc_data = cat_dics(lc_data_hps)
+    return lc_data
+
+
 def dic_select(dic, slct):
     new_dic = {}
     for key in dic.keys():
@@ -978,6 +997,54 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
             h_out_gp[key]= new_data.astype(np.float32)
         else:
             h_out_gp[key] = new_data
+        print("\t\tDone writing. read+format+write: {}".format(time.time()-t1))
+    return
+
+def copy_columns_interpolation_dust_raw_heal_pix(input_fname, output_fname,
+                                                 kdtree_index, step1, step2,
+                                                 step1_a, step2_a, mask1, mask2, 
+                                                 index_2to1, lc_a, 
+                                                 healpix_pixels, 
+                                                 verbose = False, 
+                                                 short = False, supershort = False, 
+                                                 step = -1, dust_factors = 1.0,
+                                                 luminosity_factors = None):
+    print("===================================")
+    print("copy columns interpolation dust raw")
+    # lc_a = 1.0/(1.0+lc_redshift)
+    # input_a = 1.0/(1.0 + input_redshift)
+    del_a = lc_a-step1_a
+    print("del_a: ", del_a)
+    h_out_gps = {}
+    h_out_gps_slct = {}
+    for healpix_pixel in healpix:
+        h_out = h5py.File(output_fname,'w')
+        h_out_gps[healpix_pixel] = h_out.create_group('galaxyProperties')
+        slct = lc_a['healpix_pixel']==healpix
+        h_out_gps[healpix_pixel]['dustFactor'] = dust_factors[slct]
+        h_out_gps_slct[healpix_pixel] = slct
+    h_in_gp1 = h5py.File(input_fname.replace("${step}",str(step1)),'r')['galaxyProperties']
+    h_in_gp2 = h5py.File(input_fname.replace("${step}",str(step2)),'r')['galaxyProperties']
+
+    keys = get_keys(h_in_gp1)
+    max_float = np.finfo(np.float32).max #The max float size
+
+    for i in range(0,len(keys)):
+        t1 = time.time()
+        key = keys[i]
+        if verbose:
+            print('{}/{} [{}] {}'.format(i,len(keys),step, key))
+        if not to_copy(key, short, supershort):
+            continue
+        new_data = get_column_interpolation_dust_raw(
+            key, h_in_gp1, h_in_gp2, index_2to1, mask1, mask2, step1_a, step2_a, lc_a, dust_factors, 
+            kdtree_index = kdtree_index, luminosity_factors = luminosity_factors)
+        slct_finite = np.isfinite(new_data)
+        #If the data is a double, record it as a float to save on disk space
+        if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
+            new_data= new_data.astype(np.float32)
+        for healpix_pixel in healpix:
+            h_out_gps[healpix_pixel][key] = data[h_out_gps_slct[healpix_pixel]]
         print("\t\tDone writing. read+format+write: {}".format(time.time()-t1))
     return
 
@@ -2135,11 +2202,6 @@ def lightcone_resample(param_file_name):
             assert(np.sum(slct_neg) == 0)
             # TODO Only allow 
             if use_dust_factor: 
-                # copy_columns_slope_dust(gltcs_step_fname, gltcs_slope_step_fname, 
-                #                         output_step_loc, index, 
-                #                         step_a, lc_a_cc,
-                #                         verbose=verbose, mask=mask1, short = short, supershort=supershort,
-                #                         step = step, dust_factors = match_dust_factors)
                 copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
                                                 step, step2, step_a, step2_a, mask1, mask2, 
                                                 index_2to1, lc_a_cc, verbose = verbose,
@@ -2216,16 +2278,29 @@ def lightcone_resample(param_file_name):
                                   verbose = verbose,mask = mask, short = short, step = step)
             else:
                 copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
-   
-        overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
-                          verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
-                          internal_step = internal_file_step, fake_lensing=fake_lensing)
-        overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
-        add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
-                            internal_step = internal_file_step)
-        add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
-        add_size_quantities(output_step_loc)
-        add_ellipticity_quantities(output_step_loc)
+        if True:
+            overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
+                              verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                              internal_step = internal_file_step, fake_lensing=fake_lensing)
+            overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
+            add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                                internal_step = internal_file_step)
+            add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
+            add_size_quantities(output_step_loc)
+            add_ellipticity_quantities(output_step_loc)
+        else:
+            for healpix_pixel in healpix_pixels:
+                output_healpix_file = output_step_loc.replace("${healpix}",str(healpix_pixel))
+                overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
+                              verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                              internal_step = internal_file_step, fake_lensing=fake_lensing)
+                overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
+                add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                                internal_step = internal_file_step)
+                add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
+                add_size_quantities(output_step_loc)
+                add_ellipticity_quantities(output_step_loc)
+
         if plot:
             dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
             new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
@@ -2251,6 +2326,7 @@ def lightcone_resample(param_file_name):
             #plot_clr_mag(lc_data, new_gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
             plot_ri_gr_mag(lc_data, new_gal_prop, index, mag_bins)
         if plot or plot_substep:
+            dtk.save_figs('figs/'+param_file_name+"/"+__file__+"/")
             plt.show()
         print("\n=====\ndone. {}".format(time.time()-t0))
     output_all = output_fname.replace("${step}","all")
