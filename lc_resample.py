@@ -27,7 +27,6 @@ from cosmodc2.mock_diagnostics import mean_des_red_sequence_gr_color_vs_redshift
 from ellipticity_model import monte_carlo_ellipticity_bulge_disk
 import galmatcher 
 
-
 def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     t1 = time.time()
     gal_prop = {}
@@ -49,66 +48,6 @@ def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
         print('done loading gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
 
-
-def construct_gal_prop_dust_factor(fname, dust_factor, verbose=False, mask = None, mag_r_cut = False):
-    t1 = time.time()
-    gal_prop = {}
-    hfile = h5py.File(fname,'r')
-    hgp = hfile['galaxyProperties']
-    m_star = np.log10(hgp['totalMassStellar'].value)
-    mag_gd = hgp['SDSS_filters/magnitude:SDSS_g:rest:dustAtlas'].value
-    mag_rd = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
-    mag_id = hgp['SDSS_filters/magnitude:SDSS_i:rest:dustAtlas'].value
-    mag_gnd = hgp['SDSS_filters/magnitude:SDSS_g:rest'].value
-    mag_rnd = hgp['SDSS_filters/magnitude:SDSS_r:rest'].value
-    mag_ind = hgp['SDSS_filters/magnitude:SDSS_i:rest'].value
-    mag_dgd = mag_gd - mag_gnd
-    mag_drd = mag_rd - mag_rnd
-    mag_did = mag_id - mag_ind
-    mag_g = mag_gd + (dust_factor-1.0)*mag_dgd
-    mag_r = mag_rd + (dust_factor-1.0)*mag_drd
-    mag_i = mag_id + (dust_factor-1.0)*mag_did
-    if verbose:
-        print("dust factor: ", dust_factor)
-        slct_fnt = np.isfinite(mag_g)
-        print(np.sum(mag_g[slct_fnt]-mag_gd[slct_fnt]))
-        print("num diff: ", np.sum( (mag_g[slct_fnt]-mag_gd[slct_fnt]) == 0), np.sum(slct_fnt))
-        slct_fnt = np.isfinite(mag_r)
-        print(np.sum(mag_r[slct_fnt]-mag_rd[slct_fnt]))
-        print("num diff: ", np.sum( (mag_r[slct_fnt]-mag_rd[slct_fnt]) == 0), np.sum(slct_fnt))
-        slct_fnt = np.isfinite(mag_i)
-        print(np.sum(mag_i[slct_fnt]-mag_id[slct_fnt]))
-        print("num diff: ", np.sum( (mag_i[slct_fnt]-mag_id[slct_fnt]) == 0), np.sum(slct_fnt))
-
-    if mask is None:
-        mask = np.ones(mag_r.size,dtype=bool)
-    if mag_r_cut:
-        mask = (mag_r < -10) & mask
-    gal_prop['m_star'] = m_star[mask]
-    gal_prop['Mag_r']  = mag_r[mask]
-    gal_prop['clr_gr'] = mag_g[mask]-mag_r[mask]
-    gal_prop['clr_ri'] = mag_r[mask]-mag_i[mask]
-    gal_prop['Mag_g']  = mag_g[mask]
-    gal_prop['Mag_i']  = mag_i[mask]
-    #lum debuging
-    lum_gd = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value)
-    lum_rd = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value)
-    # lum_id = np.log10(hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value)
-    lum_gnd =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value)
-    lum_rnd =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value)
-    # lum_ind =np.log10( hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value)
-    lum_dgd = lum_gd - lum_gnd
-    lum_g = 10**(lum_gd + (dust_factor - 1.0)* lum_dgd)
-    
-    lum_g = 10**(lum_gd + (dust_factor - 1.0)* lum_dgd)
-    print("g lum vs mag: ", np.sum(-2.5*np.log10(lum_gd)!=mag_gd))
-    print("dust_mag_g vs dust_lum_g: ", np.sum( -2.5*np.log10(lum_g) != mag_g), mag_g.shape)
-    print("dust_mag_g vs dust_lum_g: ", np.nansum( -2.5*np.log10(lum_g) - mag_g))
-    if verbose:
-        print('done loading gal prop. {}'.format(time.time()-t1))
-    return gal_prop,mask
-
-
 def cat_dics(dics, keys = None):
     new_dic = {}
     if keys is None:
@@ -119,43 +58,6 @@ def cat_dics(dics, keys = None):
             new_dic[key].append(dic[key])
         new_dic[key] = np.concatenate(new_dic[key])
     return new_dic
-
-
-def construct_gal_prop_redshift(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None):
-    t1 = time.time()
-    del_a = target_a - snap_a
-    gal_prop = {}
-    gal_prop_slope = {}
-    hfile = h5py.File(fname,'r')
-    hfile_slp = h5py.File(slope_fname,'r')
-    hgp = hfile['galaxyProperties']
-    hgp_slp = hfile_slp['galaxyProperties']
-    m_star =hgp['totalMassStellar'].value
-    mag_g = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
-    mag_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    mag_i = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
-    if mask is None:
-        mask = np.ones(mag_r.size,dtype=bool)
-    if mag_r_cut:
-        mask = (mag_r < -10) & mask
-    if index is None:
-        index = np.arange(0,np.sum(mask)-1,dtype='i4')
-    m_star_slp = hgp_slp['totalMassStellar'].value
-    mag_g_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
-    mag_r_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    mag_i_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
-    gal_prop['m_star'] = np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a)
-    gal_prop['Mag_r'] = -2.5*np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a)
-    gal_prop['clr_gr'] = -2.5*( np.log10(mag_g[mask][index] + mag_g_slp[mask][index]*del_a) - np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) )
-    gal_prop['clr_ri'] = -2.5*( np.log10(mag_r[mask][index] + mag_r_slp[mask][index]*del_a) - np.log10(mag_i[mask][index] + mag_i_slp[mask][index]*del_a) )
-    
-    #Debug
-    # mag_r = hgp['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
-    # lum_r = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    # mag2_r = -2.5*np.log10(
-    if verbose:
-        print('done loading slope gal prop. {}'.format(time.time()-t1))
-    return gal_prop,mask
 
 
 def clean_up_gal_prop(gal_prop):
@@ -172,59 +74,6 @@ def clean_up_gal_prop(gal_prop):
     for key in gal_prop.keys():
         gal_prop[key][slct_nfnt] = -4
     return gal_prop
-
-
-def construct_gal_prop_redshift_dust(fname,slope_fname,snap_a,target_a,verbose=False,mask=None,mag_r_cut = False,index = None, dust_factor = 1.0 ):
-    t1 = time.time()
-    del_a = target_a - snap_a
-    gal_prop = {}
-    gal_prop_slope = {}
-    hfile = h5py.File(fname,'r')
-    hfile_slp = h5py.File(slope_fname,'r')
-    hgp = hfile['galaxyProperties']
-    hgp_slp = hfile_slp['galaxyProperties']
-    m_star_const =hgp['totalMassStellar'].value
-    # mag with dust (d= dust)
-    mag_gd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
-    mag_rd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    mag_id = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
-    # mag witout dust (nd = no dust)
-    mag_gnd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value
-    mag_rnd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
-    mag_ind = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
-    # dust extinction
-    mag_g_delta = -2.5*np.log10(mag_gd) - -2.5*np.log10(mag_gnd)
-    mag_r_delta = -2.5*np.log10(mag_rd) - -2.5*np.log10(mag_rnd)
-    mag_i_delta = -2.5*np.log10(mag_id) - -2.5*np.log10(mag_ind)
-    if mask is None:
-        print("mask is none")
-        mask = np.ones(mag_gd.size,dtype=bool)
-    if mag_r_cut:
-        mask = (mag_rd < -10) & mask
-    if index is None:
-        print("index is none")
-        index = np.arange(0,np.sum(mask)-1,dtype='i4')
-    m_star_slp = hgp_slp['totalMassStellar'].value
-    # no dust interpolation slopes
-    mag_gnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value
-    mag_rnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
-    mag_ind_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
-    # no dust interpolated values
-    mag_g = -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a) + mag_g_delta[mask][index]*dust_factor
-    mag_r = -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a) + mag_r_delta[mask][index]*dust_factor
-    mag_i = -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a) + mag_i_delta[mask][index]*dust_factor
-    m_star = np.log10(m_star_const[mask][index] + m_star_slp[mask][index]*del_a)
-    indx = [ 355112, 2744050, 3707872, 5329360, 5963433, 5984882]
-    gal_prop['m_star'] = m_star
-    gal_prop['Mag_r'] = mag_r
-    gal_prop['clr_gr'] = mag_g - mag_r
-    gal_prop['clr_ri'] = mag_r - mag_i
-    gal_prop['dust_factor'] = np.ones(m_star.size,dtype='f4')*dust_factor
-    gal_prop['index'] = np.arange(m_star.size,dtype='i8')
-    gal_prop = clean_up_gal_prop(gal_prop)
-    if verbose:
-        print('done loading slope gal prop. {}'.format(time.time()-t1))
-    return gal_prop,mask
 
 
 def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, mask1, mask2, 
@@ -339,73 +188,6 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
     # print(np.sum(~np.isfinite(gal_prop['m_star'])))
     # print(gal_prop['m_star'][np.isnan(gal_prop['m_star'])])
     return gal_prop
-
-
-def construct_many_gal_prop_redshift_dust(fname, slope_fname, snap_a, target_a_list, verbose=False,mask=None,mag_r_cut = False,index = None, dust_factor_list = [1.0] ):
-    t1 = time.time()
-    #TODO target_a not defined
-    del_a = target_a_list - snap_a
-    gal_prop = {}
-    gal_prop_slope = {}
-    hfile = h5py.File(fname,'r')
-    hfile_slp = h5py.File(slope_fname,'r')
-    hgp = hfile['galaxyProperties']
-    hgp_slp = hfile_slp['galaxyProperties']
-    m_star =hgp['totalMassStellar'].value
-    # mag with dust (d= dust)
-    mag_gd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest:dustAtlas'].value
-    mag_rd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest:dustAtlas'].value
-    mag_id = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest:dustAtlas'].value
-    # mag witout dust (nd = no dust)
-    mag_gnd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value
-    mag_rnd = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
-    mag_ind = hgp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
-    # dust extinction
-    mag_g_delta = -2.5*np.log10(mag_gd) - -2.5*np.log10(mag_gnd)
-    mag_r_delta = -2.5*np.log10(mag_rd) - -2.5*np.log10(mag_rnd)
-    mag_i_delta = -2.5*np.log10(mag_id) - -2.5*np.log10(mag_ind)
-    if mask is None:
-        mask = np.ones(mag_rnd.size,dtype=bool)
-    if mag_r_cut:
-        mask = (mag_rnd < -10) & mask
-    if index is None:
-        index = np.arange(0,np.sum(mask)-1,dtype='i4')
-    m_star_slp = hgp_slp['totalMassStellar'].value
-    # no dust interpolation slopes
-    mag_gnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_g:rest'].value
-    mag_rnd_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_r:rest'].value
-    mag_ind_slp = hgp_slp['SDSS_filters/totalLuminositiesStellar:SDSS_i:rest'].value
-    gal_prop_list = []
-    for target_a in target_a_list:
-        result_a = []
-        del_a = target_a - snap_a
-        mag_g_list = []
-        mag_r_list = []
-        mag_i_list = []
-        m_star_list = []
-        gal_indx_list = []
-        for dust_factor in dust_factor_list:
-        # no dust interpolated values
-            mag_g_list.append( -2.5*np.log10(mag_gnd[mask][index] + mag_gnd_slp[mask][index]*del_a) + mag_g_delta[mask][index]*dust_factor)
-            mag_r_list.append( -2.5*np.log10(mag_rnd[mask][index] + mag_rnd_slp[mask][index]*del_a) + mag_r_delta[mask][index]*dust_factor)
-            mag_i_list.append( -2.5*np.log10(mag_ind[mask][index] + mag_ind_slp[mask][index]*del_a) + mag_i_delta[mask][index]*dust_factor)
-            m_star_list.append( np.log10(m_star[mask][index] + m_star_slp[mask][index]*del_a))
-            gal_indx_list.append(np.arange(m_star[-1].size))
-        m_star = np.concatenate(m_star_list)
-        mag_g = np.concatenate(mag_g_list)
-        mag_r = np.concatenate(mag_r_list)
-        mag_i = np.concatenate(mag_i_list)
-        gal_indx = np.concatenate(gal_indx_list)
-        gal_prop['m_star'] = m_star
-        gal_prop['Mag_r'] = mag_r
-        gal_prop['clr_gr'] = mag_g - mag_r
-        gal_prop['clr_ri'] = mag_r - mag_i
-        gal_prop['dust_factor'] = np.ones(m_star.size,dtype='f4')*dust_factor
-        gal_prop['index'] = gal_indx
-        gal_prop_list.append(gal_prop)
-    if verbose:
-        print('done loading slope gal prop. {}'.format(time.time()-t1))
-    return gal_prop_list,mask
 
 
 def construct_lc_data(fname, match_obs_color_red_seq = False, 
@@ -651,165 +433,9 @@ def to_copy(key, short, supershort):
     return True
 
 
-def copy_columns(input_fname, output_fname, index, 
-                 verbose = False, mask = None, 
-                 short = False, supershort = False, step = -1):
-    h_in = h5py.File(input_fname,'r')
-    h_out = h5py.File(output_fname,'w')
-    h_in_gp = h_in['galaxyProperties']
-    h_out_gp = h_out.create_group('galaxyProperties')
-    keys = get_keys(h_in_gp)
-    for i in range(0,len(keys)):
-        key = keys[i]
-        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
-            if short:
-                continue
-        if "SDSS" not in key and "total" not in key and "MassStellar" not in key and "infallIndex" != key:
-            if supershort:
-                continue
-        if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
-            print("{} isn't copied".format(key))
-            continue
-        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
-        data = h_in_gp[key].value
-        if mask is not None:
-            data = data[mask]
-        h_out_gp[key]=data[index]
-    return
-
-
-def copy_columns_dust(input_fname, output_fname, raw_index, dust_factor, 
-                      verbose = False,mask = None,
-                      short = False, supershort = False, step = -1, dust_factors = 1.0):
-    h_in = h5py.File(input_fname,'r')
-    h_out = h5py.File(output_fname,'w')
-    h_in_gp = h_in['galaxyProperties']
-    h_out_gp = h_out.create_group('galaxyProperties')
-    h_out_gp['dustFactor'] = dust_factor
-    keys = get_keys(h_in_gp)
-    for i in range(0,len(keys)):
-        t1 = time.time()
-        key = keys[i]
-        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
-            if short:
-                continue
-        if "SDSS" not in key and "total" not in key and ":rest" not in key and "MassStellar" not in key and "infallIndex" != key:
-            if supershort:
-                continue
-        if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
-            print("{} isn't copied".format(key))
-            continue
-        print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key), end='')
-        if ":dustAtlas" in key:
-            org_data = h_in_gp[key].value[mask][raw_index]
-            nd_key = key.replace(":dustAtlas","")
-            dust_data =  np.log10(h_in_gp[key].value[mask][raw_index])
-            no_dust_data = np.log10(h_in_gp[nd_key].value[mask][raw_index])
-            delta_dust = dust_data - no_dust_data
-            data = 10**(dust_data + (dust_factor -1.0)*delta_dust)
-            # nd_key = key.replace(":dustAtlas","")
-            # dust_data =  np.log10(h_in_gp[key].value[mask][index])
-            # no_dust_data = np.log10(h_in_gp[nd_key].value[mask][index])
-            # delta_dust = dust_data - no_dust_data 
-            # data = 10**(dust_data + (dust_factor -1.0 ) * delta_dust)
-            # print(h_in_gp[key][mask][index])
-            # print(data)
-            # print("sum diff: ", np.sum(h_in_gp[key][mask][index] - data))
-        else:
-            data = h_in_gp[key].value
-            if mask is not None:
-                data = data[mask]
-            data = data[raw_index]
-        h_out_gp[key]=data
-        print("\n\ttime: {}".format(time.time()-t1))
-    return
-    
-
-def copy_columns_slope(input_fname, input_slope_fname, 
-                       output_fname, index,  
-                       input_a, lc_a, 
-                       verbose = False, mask = None,
-                       short = False, supershort = False, step = -1):
-    # lc_a = 1.0/(1.0+lc_redshift)
-    # input_a = 1.0/(1.0 + input_redshift)
-    del_a = lc_a-input_a
-    h_in = h5py.File(input_fname,'r')
-    h_in_slope = h5py.File(input_slope_fname,'r')
-    h_out = h5py.File(output_fname,'w')
-    h_in_gp = h_in['galaxyProperties']
-    h_in_slope_gp = h_in_slope['galaxyProperties']
-    h_out_gp = h_out.create_group('galaxyProperties')
-    keys = get_keys(h_in_gp)
-    max_float = np.finfo(np.float32).max #The max float size
-    for i in range(0,len(keys)):
-        key = keys[i]
-        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key or "morphology" in key:
-            if short:
-                continue
-        if "SDSS" not in key and "total" not in key and ":rest" not in key and "MassStellar" not in key and 'infallIndex' != key:
-            if supershort:
-                continue
-        if any([ ca == key for ca in copy_avoids]) or any([ cap in key for cap in copy_avoids_ptrn ]):
-            print("{} isn't copied".format(key))
-            continue
-   
-        if verbose:
-            print('{}/{},{} {} {}'.format(i,len(keys),step,float(i)/float(len(keys)), key))
-        data = h_in_gp[key].value
-        slope = h_in_slope_gp[key].value
-        if mask is not None:
-            data = data[mask]
-            slope = slope[mask]
-        no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
-        if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
-            #print("\tslope")
-            new_data = data[index] + slope[index]*del_a
-        else:
-            #print("\tno slope")
-            new_data = data[index]
-        slct_finite = np.isfinite(new_data)
-        if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
-            h_out_gp[key]= new_data.astype(np.float32)
-        else:
-            h_out_gp[key] = new_data
-    return
-
-
-def get_column_slope_dust(key, h_in_gp, h_in_slope_gp, index, del_a, mask = None, dust_factors = 1.0):
-    if ":dustAtlas" in key:
-        print("\thas dust")
-        key_nd = key.replace(":dustAtlas","")
-        data = h_in_gp[key_nd].value
-        slope = h_in_slope_gp[key_nd].value
-        # multiplicitive effect of dust
-        data_dust = h_in_gp[key].value
-        dust_effect = data_dust/data 
-        if mask is not None:
-            dust_effect = dust_effect[mask]
-    else:
-        data = h_in_gp[key].value
-        slope = h_in_slope_gp[key].value
-    if mask is not None:
-        data = data[mask]
-        slope = slope[mask]
-
-    no_slope = key in no_slope_var or any(s in key for s in no_slope_ptrn)
-    if (data.dtype == np.float64 or data.dtype == np.float32) and not no_slope:
-        print("\t float & slope")
-        if ":dustAtlas" in key:
-            print("\t\t has dustAtlas")
-            # after interpolating on the undusted luminosity, apply the effect of dust
-            new_data = (data[index] + slope[index]*del_a)*(dust_effect[index]**dust_factors)
-        else:
-            print("\t\t does not have dustAtlas")
-            new_data = data[index] + slope[index]*del_a
-    else:
-        new_data = data[index]
-    return new_data
-
-
 # Keys that have their luminosity adjusted
 luminosity_factors_keys = ['Luminosities', 'Luminosity']
+
 def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors, kdtree_index=None, 
                                       luminosity_factors = None):
     """This function returns the interpolated quantity between two
@@ -925,40 +551,6 @@ def get_func_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2
     return val0, slope0, dust_effect0
     
 
-def copy_columns_slope_dust(input_fname, input_slope_fname, 
-                            output_fname, index,  
-                            input_a, lc_a, 
-                            verbose = False, mask = None,
-                            short = False, supershort = False, 
-                            step = -1, dust_factors = 1.0):
-    # lc_a = 1.0/(1.0+lc_redshift)
-    # input_a = 1.0/(1.0 + input_redshift)
-    del_a = lc_a-input_a
-    print("del_a: ", del_a)
-    h_in = h5py.File(input_fname,'r')
-    h_in_slope = h5py.File(input_slope_fname,'r')
-    h_out = h5py.File(output_fname,'w')
-    h_in_gp = h_in['galaxyProperties']
-    h_in_slope_gp = h_in_slope['galaxyProperties']
-    h_out_gp = h_out.create_group('galaxyProperties')
-    keys = get_keys(h_in_gp)
-    max_float = np.finfo(np.float32).max #The max float size
-    for i in range(0,len(keys)):
-        key = keys[i]
-        if not to_copy(key, short, supershort):
-            continue
-        if verbose:
-            print('{}/{} [{}] {}'.format(i,len(keys),step, key))
-        new_data = get_column_slope_dust(key, h_in_gp, h_in_slope_gp, index, del_a, mask, dust_factors)
-        slct_finite = np.isfinite(new_data)
-        #If the data is a double, record it as a float to save on disk space
-        if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
-            h_out_gp[key]= new_data.astype(np.float32)
-        else:
-            h_out_gp[key] = new_data
-    return
-
-
 def copy_columns_interpolation_dust_raw(input_fname, output_fname,
                                         kdtree_index, step1, step2,
                                         step1_a, step2_a, mask1, mask2, 
@@ -999,6 +591,7 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
             h_out_gp[key] = new_data
         print("\t\tDone writing. read+format+write: {}".format(time.time()-t1))
     return
+
 
 def copy_columns_interpolation_dust_raw_heal_pix(input_fname, output_fname,
                                                  kdtree_index, step1, step2,
@@ -1051,7 +644,8 @@ def copy_columns_interpolation_dust_raw_heal_pix(input_fname, output_fname,
 
 def overwrite_columns(input_fname, output_fname, ignore_mstar = False, 
                       verbose=False, cut_small_galaxies_mass = None, 
-                      internal_step=None, fake_lensing=False):
+                      internal_step=None, fake_lensing=False, healpix=False,
+                      healpix_file = None):
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
@@ -1160,6 +754,14 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['shear2'] = np.zeros(size, dtype='f4')
         h_out_gp['magnification'] = np.ones(size, dtype='f4')
         h_out_gp['convergence'] = np.zeros(size, dtype='f4')
+    if healpix:
+        h_shear = h5py.File(healpix_file, 'r')
+        h_out_gp['ra'] = h_shear['ra_lensed'].value[mask]
+        h_out_gp['dec'] = h_shear['dec_lensed'].value[mask]
+        h_out_gp['shear1'] = h_shear['shear1'].value[mask]
+        h_out_gp['shear2'] = h_shear['shear2'].value[mask]
+        h_out_gp['magnification'] = h_shear['magnification'].value[mask]
+        h_out_gp['convergence'] = h_shear['convergence'].value[mask]
     else:
         h_out_gp['ra'] = h_in['ra_lensed'].value[mask]
         h_out_gp['dec'] = h_in['dec_lensed'].value[mask]
@@ -2031,6 +1633,9 @@ def lightcone_resample(param_file_name):
     version_minor_minor = param.get_int('version_minor_minor')
     # The other options are depricated
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
+    assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
+    if heal_pix_file:
+        assert ("${healpix}" in output_fname), "Must have ${healpix} string in output while using healpix"
     if not cut_small_galaxies: # if we don't cut out small galaxies, set the mass limit
         cut_small_galaxies_mass = None # to None as a flag for other parts in the code
     # Load Eve's galmatcher mask. Another script writes the mask to file (Need to check which one)
@@ -2086,7 +1691,9 @@ def lightcone_resample(param_file_name):
                                     match_obs_color_red_seq = match_obs_color_red_seq,
                                     cut_small_galaxies_mass = cut_small_galaxies_mass, 
                                     internal_step=internal_file_step)
-        if(use_slope):
+        #There is no other option. I just don't want to re-indent this entire block of code--
+        #emacs doesn't re-indent python code well
+        if(use_slope): 
             print("using slope", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
             lc_a_cc = np.copy(lc_a) # galaxy scale factor for copy columns
@@ -2128,11 +1735,6 @@ def lightcone_resample(param_file_name):
                         # plt.show()
                         gal_prop_list.append(gal_prop_tmp2)
                     gal_prop_a = cat_dics(gal_prop_list)
-                else:
-                    gal_prop_a, mask = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
-                                                                        step_a, abins_avg[k],
-                                                                        verbose = verbose,
-                                                                        mask = mask1)
                 # Find the closest Galacticus galaxy
                 index_abin = resample_index(lc_data_a, gal_prop_a, 
                                             ignore_mstar = ignore_mstar, 
@@ -2167,11 +1769,6 @@ def lightcone_resample(param_file_name):
                     match_dust_factors[slct_lc_abin] = gal_prop_a['dust_factor'][index_abin]
                     if use_substep_redshift:
                         lc_a_cc[slct_lc_abin] = abins_avg[k]
-                else:
-                    # record the Galacticus galaxy index, 
-                    index[slct_lc_abin] = index_abin
-                    # all matches have 1.0 dust factor since aren't applying extra dust factors
-                    match_dust_factors[slct_lc_abin] = 1.0
                 # By default use the same Galacticus luminosity
                 match_luminosity_factors[slct_lc_abin] = 1.0
                 # For the brightest galaxies, adjust all luminosities by the same factor
@@ -2195,89 +1792,16 @@ def lightcone_resample(param_file_name):
                     #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
                     plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);
                     plt.show()
-                    
             slct_neg = index == -1
             print(match_dust_factors)
             print("not assigned: {}/{}: {:.2f}".format( np.sum(slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
             assert(np.sum(slct_neg) == 0)
-            # TODO Only allow 
-            if use_dust_factor: 
-                copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
+            copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
                                                 step, step2, step_a, step2_a, mask1, mask2, 
                                                 index_2to1, lc_a_cc, verbose = verbose,
                                                 short = short, supershort = supershort,
-                                                    dust_factors = match_dust_factors, step = step,
-                                                    luminosity_factors = match_luminosity_factors)
-            else:
-                copy_columns_slope(gltcs_step_fname, gltcs_slope_step_fname, 
-                                   output_step_loc, index, 
-                                   step_a, lc_a,
-                                   verbose=verbose, mask=mask1, 
-                                   short = short, supershort = supershort, step = step)
-            
-        else:
-            print("using no slope", step)
-            gal_prop_simple,mask_simple = construct_gal_prop(gltcs_step_fname, verbose = verbose,mask =mask1)
-            if use_dust_factor:
-                masks = []
-                gal_props = []
-                masks.append(mask_simple)
-                gal_props.append(gal_prop_simple)
-                for dust_factor in dust_factors:
-                    gp, m = construct_gal_prop_dust_factor(gltcs_step_fname, dust_factor, verbose = verbose,mask =mask1)
-                    gal_props.append(gp)
-                    masks.append(m)
-                gal_prop = cat_dics(gal_props)
-                mask = mask_simple#//np.concatenate(masks)
-            else:
-                gal_prop = gal_prop_simple
-                mask = mask_simple
-            print("mstar before call: ", ignore_mstar)
-            index = resample_index(lc_data, gal_prop, ignore_mstar = ignore_mstar, verbose = verbose)
-
-            if plot:
-                #plot_differences(lc_data, gal_prop, index)
-                #plot_differences_2d(lc_data, gal_prop, index)
-                #plot_differences_2d(lc_data, gal_prop, index, x='m_star')
-                mag_bins = (-21,-20,-19)
-                #plot_mag_r(lc_data, gal_prop, index)
-                plot_m_star(lc_data, gal_prop, index)
-                #plot_side_by_side(lc_data, gal_prop, index)
-                plot_single_dist(lc_data, gal_prop, index, 'clr_gr', 'g-r',bins=np.linspace(0,1.2,100))
-                plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
-                #plot_clr_mag(lc_data, gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
-                # plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins)
-                
-            if use_dust_factor:
-                gal_prop_size = gal_prop['Mag_r'].size//(1+len(dust_factors)) #The data is replicated 1+N where n is the number of dust factors used
-                dust_mod_index = index //( gal_prop_size) # which dust factor was matched in the frankenstein
-                raw_index = index % (gal_prop_size) #gal_prop index not looking at dust factor
-                #Now we get the dust factor for each match
-                matched_dust_factor = np.zeros(lc_data['redshift'].size,dtype='f4')
-                print(0,"--",len(dust_factors)+1)
-                print("dust_mod_index", dust_mod_index)
-                print("raw_index", raw_index)
-                for ii in range(0,len(dust_factors)+1):
-                    slct = dust_mod_index == ii
-                    print(ii,'dust_index {}/{}'.format(np.sum(slct),slct.size))
-                    if ii == 0:
-                        print("ii == 0")
-                        matched_dust_factor[slct] = 1.0
-                        print(matched_dust_factor[slct])
-                    else:
-                        print("ii != 0")
-                        print(dust_factors)
-                        print(dust_factors[ii-1])
-                        matched_dust_factor[slct] = dust_factors[ii-1]
-                        print(matched_dust_factor[slct])
-                print("matched_dust_factor")
-                print(matched_dust_factor)
-                print(np.min(matched_dust_factor),"->",np.max(matched_dust_factor))
-                copy_columns_dust(gltcs_step_fname, output_step_loc, 
-                                  raw_index, matched_dust_factor,
-                                  verbose = verbose,mask = mask, short = short, step = step)
-            else:
-                copy_columns(gltcs_step_fname, output_step_loc, index, verbose = verbose,mask = mask, short = short, step = step)
+                                                dust_factors = match_dust_factors, step = step,
+                                                luminosity_factors = match_luminosity_factors)
         if True:
             overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
@@ -2303,6 +1827,7 @@ def lightcone_resample(param_file_name):
 
         if plot:
             dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
+            #new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
             new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
             index = np.arange(lc_data['redshift'].size)
             plt.figure()
