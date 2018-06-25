@@ -29,6 +29,7 @@ def load_mags(fname,frame,use_dust=False):
     dic['mag_i'] = hgroup['galaxyProperties/SDSS_filters/magnitude:SDSS_i:'+frame+dust].value
     dic['clr_gr'] = dic['mag_g']-dic['mag_r']
     dic['clr_ri'] = dic['mag_r']-dic['mag_i']
+    dic['mstar'] = hgroup['galaxyProperties/totalMassStellar'].value
     return dic
 
 def multiply(dic,val):
@@ -42,6 +43,11 @@ def add(dic1, dic2):
     for key in dic1.keys():
         new_dic[key] = dic1[key]+dic2[key]
     return new_dic;
+
+def select_dic(dic1, slct):
+    new_dic = {}
+    for key in dic1.keys():
+        new_dic[key] = dic1[key][slct]
 
 def plot_colors(mags,title,frame):
     plt.figure()
@@ -62,35 +68,61 @@ def plot_colors(mags,title,frame):
     plt.xlabel('mag_r');plt.ylabel('g-r')
     plt.title(title)
 
+def make_slope(mags1, mags2, index_2to1):
+    result = {}
+    for key in mags1.keys():
+        mags1_2ndstep = np.copy(mags1[key])
+        slct = index_2to1 != -1
+        mags1_2ndstep[slct] = mags2[key][index_2to1][slct]
+        diff =  mags1_2ndstep - mags1[key] 
+        result[key] = diff
+        if(key == 'mag_r'):
+            plt.figure()
+            bins = np.linspace(-25,-5, 100)
+            h, xbins, ybins = np.histogram2d(mags1[key][slct], mags2[key][index_2to1][slct], bins=(bins,bins))
+            plt.pcolor(xbins,ybins,h.T, cmap='PuBu', norm=clr.LogNorm())
+            plt.plot((bins[0], bins[-1]),(bins[0], bins[-1]), '--k')
+            plt.xlabel('Mag_r step t')
+            plt.ylabel('Mag_r step t+1')
+            
+            plt.show()
+    return result
+
+
+
 if __name__ == "__main__":
     param = dtk.Param(sys.argv[1])
     gltcs_fname = param.get_string('gltcs_fname')
-    gltcs_slope_fname = param.get_string('gltcs_slope_fname')
+    index_loc = param.get_string('index_loc')
     steps = param.get_int_list('steps')
     stepz = dtk.StepZ(sim_name='AlphaQ')
     frame ='rest'
-    frame ='observed'
+    #frame ='observed'
     for i in range(0,len(steps)-1):
         step1 = steps[i+1]
         step2 = steps[i]
-        a_1 = stepz.get_a(step1)
-        a_2 = stepz.get_a(step2)
-        print(a_1,a_2)
-        del_a = a_2 - a_1
+        print(step1, step2)
         mag1 = load_mags(gltcs_fname.replace('${step}',str(step1)),frame,use_dust=True)
-        mag2 = load_mags(gltcs_fname.replace('${step}',str(step2)),frame,use_dust=True)
-        slope1 = load_mags(gltcs_slope_fname.replace('${step}',str(step1)),frame, use_dust=True)
+        mag2_raw = load_mags(gltcs_fname.replace('${step}',str(step2)),frame,use_dust=True)
+        index_2to1 = h5py.File(index_loc.replace('${step}', str(step1)),'r')['match_2to1'].value
+        slope1 = make_slope(mag1, mag2_raw, index_2to1)
+        #slope1 = load_mags(gltcs_slope_fname.replace('${step}',str(step1)),frame, use_dust=True)
+        continue
         plot_colors(mag1,str(step1),frame)
-
         for factor in np.linspace(0,1,25):
-            mag_slope = add(mag1,multiply(slope1,del_a*factor))
+            print(factor)
+            mag_slope = add(mag1,multiply(slope1,factor))
             plot_colors(mag_slope,"{:.2f} of the way from {} to {}.".format(factor,step1,step2),frame)
-        plot_colors(mag2,str(step2),frame)
+        plot_colors(mag2_raw,str(step2),frame)
         for factor in np.linspace(1,0,25):
-            mag_slope = add(mag1,multiply(slope1,del_a*factor))
+            print(factor)
+            mag_slope = add(mag1,multiply(slope1,factor))
             plot_colors(mag_slope,"{:.2f} of the way from {} to {}.".format(factor,step1,step2),frame)
 
-
-        plot_colors(multiply(slope1,del_a),str(step1),'slope')
         dtk.save_figs('figs/'+sys.argv[1]+'/'+__file__+"/")
+        plt.close('all')
+        plot_colors(mag1,step1,frame)
+        plot_colors(mag2_raw, step2, frame)
+        dtk.save_figs('figs/'+sys.argv[1]+'/'+__file__+"/other/")
 
+        

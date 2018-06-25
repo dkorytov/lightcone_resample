@@ -75,6 +75,7 @@ def match_up(lc, ss, output):
     # plt.plot(lc['x'],lc['y'],'.',alpha=0.3)
     # plt.show()
     # exit()
+    print(lc['id'][indx ==-1])
     assert(num_not_found == 0)
     hfile = h5py.File(output,'w')
     lc_keys = lc.keys()
