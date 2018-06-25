@@ -3,7 +3,7 @@ from __future__ import print_function, division
 import sys
 
 sys.path.insert(0, '/homes/dkorytov/.local/lib/python2.7/site-packages/halotools-0.7.dev4939-py2.7-linux-x86_64.egg')
-
+import os
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
@@ -48,6 +48,7 @@ def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
         print('done loading gal prop. {}'.format(time.time()-t1))
     return gal_prop,mask
 
+
 def cat_dics(dics, keys = None):
     new_dic = {}
     if keys is None:
@@ -59,6 +60,11 @@ def cat_dics(dics, keys = None):
         new_dic[key] = np.concatenate(new_dic[key])
     return new_dic
 
+def select_dic(dic, slct):
+    new_dic = {}
+    for key in dic.keys():
+        new_dic[key]=dic[key][slct]
+    return new_dic
 
 def clean_up_gal_prop(gal_prop):
     """For each galaxy, if any property is not finite, set all other
@@ -238,10 +244,8 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         host_halo_mvir_mock = hfile['host_halo_mvir'].value    
         is_on_red_seq_gr = hfile['is_on_red_sequence_gr'].value
         is_on_red_seq_ri = hfile['is_on_red_sequence_ri'].value
-        print("lc host halo mvir: ",host_halo_mvir_mock)
         lc_data['is_cluster_red_sequence'] = (np.log10(host_halo_mvir_mock) > 13.5) & is_on_red_seq_gr & is_on_red_seq_ri
         #lc_data['is_cluster_red_sequence'] = is_on_red_seq_gr & is_on_red_seq_ri
-        print(np.sum(lc_data['is_cluster_red_sequence']), '/', lc_data['is_cluster_red_sequence'].size)
         lc_data['clr_gr_obs'] = mean_des_red_sequence_gr_color_vs_redshift(lc_data['redshift'])
         lc_data['clr_ri_obs'] = mean_des_red_sequence_ri_color_vs_redshift(lc_data['redshift'])
         lc_data['clr_iz_obs'] = mean_des_red_sequence_iz_color_vs_redshift(lc_data['redshift'])
@@ -257,18 +261,21 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
 
 def construct_lc_data_healpix(fname, match_obs_color_red_seq = False, 
                               verbose = False, recolor=False, internal_step=None,
-                              cut_small_galaxies_mass = None, healpixs=None):
-    if healpixs is None:
+                              cut_small_galaxies_mass = None, healpix_pixels=None):
+    print("Construicting light cone data: ",healpix_pixels)
+    if healpix_pixels is None:
         lc_data = construct_lc_data(fname, match_obs_color_red_seq = match_obs_color_red_seq,
                                     verbose = verbose, recolor=recolor, internal_step = internal_step,
                                     cut_small_galaxies_mass = cut_small_galaxies_mass)
     else:
         lc_data_hps = []
-        for healpix in healpixs:
-            lc_data_hp = construct_lc_data(fname, match_obs_color_red_seq = match_obs_color_red_seq,
+        for healpix_pixel in healpix_pixels:
+            fname_healpix = fname.replace('${healpix}', str(healpix_pixel))
+            print(fname_healpix)
+            lc_data_hp = construct_lc_data(fname_healpix, match_obs_color_red_seq = match_obs_color_red_seq,
                                            verbose = verbose, recolor=recolor, internal_step = internal_step,
                                            cut_small_galaxies_mass = cut_small_galaxies_mass)
-            lc_data_hp['healpix'] = np.ones(lc_data_hp['m_star'].size, dtype='i4')*healpix
+            lc_data_hp['healpix_pixel'] = np.ones(lc_data_hp['m_star'].size, dtype='i4')*healpix_pixel
             lc_data_hps.append(lc_data_hp)
         lc_data = cat_dics(lc_data_hps)
     return lc_data
@@ -446,8 +453,8 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
 
     """
     print("\tLoading key: {}".format(key))
-    if luminosity_factors is None:
-        print("\t\tluminosity factors is none")
+    # if luminosity_factors is None:
+    #     print("\t\tluminosity factors is none")
     #print("dust_factors: ", dust_factors)
     t1 = time.time()
     step_del_a = step2_a - step1_a
@@ -457,14 +464,14 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
     # descendent galaxy at step2 doesn't pass galmatcher requirements.
     mask_tot = mask1 & (index != -1) & mask2[index]
     if (key in no_slope_var) or any(ptrn in key for ptrn in no_slope_ptrn):
-        print('\t\tno interpolation')
+        #print('\t\tno interpolation')
         data = h_in_gp1[key].value[mask_tot]
         if kdtree_index is None:
             val_out = data
         else:
             val_out = data[kdtree_index]
     elif ":dustAtlas" in key:
-        print('\t\tinterpolation with dust')
+        #print('\t\tinterpolation with dust')
         key_no_dust = key.replace(":dustAtlas","")
         val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
         val1_dust = h_in_gp1[key].value[mask_tot]
@@ -481,7 +488,7 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
             val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*(dust_effect[kdtree_index]**dust_factors)
             #val_out = 10**(val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a + dust_effect[kdtree_index]*dust_factor)
     else:
-        print('\t\tinerpolation without dust')
+        #print('\t\tinerpolation without dust')
         val1_data = h_in_gp1[key].value[mask_tot]
         val2_data = h_in_gp2[key].value[index][mask_tot]
         slope = (val2_data - val1_data)/step_del_a
@@ -490,16 +497,17 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
             val_out = val1_data + slope*target_del_a
         else:
             val_out = val1_data[kdtree_index] + slope[kdtree_index]*target_del_a
-    print('\t\t',val_out.dtype)
+    #print('\t\t',val_out.dtype)
     if not(luminosity_factors is None):
         if(any(l in key for l in luminosity_factors_keys)):
-            print("\t\tluminosity adjusted")
+            #print("\t\tluminosity adjusted")
             val_out = val_out*luminosity_factors
         elif('Luminosities' in key or 'Luminosity' in key):
-            print("\t\tluminosity adjusted 2")
+            #print("\t\tluminosity adjusted 2")
             val_out = val_out*luminosity_factors
         else:
-            print("\t\tluminosity untouched")
+            pass
+            #print("\t\tluminosity untouched")
     if np.sum(~np.isfinite(val_out))!=0:
         print("{:.2e} {:.2e}".format(np.sum(~np.isfinite(val_out)), val_out.size))
         print(np.sum(~np.isfinite(val1_no_dust)))
@@ -510,7 +518,7 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         print(np.sum(~np.isfinite(slope)))
         print(np.sum(~np.isfinite(target_del_a)))
         exit()
-    print("\t\toutput size: {:.2e}".format(val_out.size))
+    #print("\t\toutput size: {:.2e}".format(val_out.size))
     print("\t\tread + format time: {}".format(time.time()-t1))
     return val_out
 
@@ -564,7 +572,6 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     # lc_a = 1.0/(1.0+lc_redshift)
     # input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-step1_a
-    print("del_a: ", del_a)
     h_out = h5py.File(output_fname,'w')
     h_out_gp = h_out.create_group('galaxyProperties')
     h_out_gp['dustFactor'] = dust_factors
@@ -593,11 +600,11 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     return
 
 
-def copy_columns_interpolation_dust_raw_heal_pix(input_fname, output_fname,
+def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
                                                  kdtree_index, step1, step2,
                                                  step1_a, step2_a, mask1, mask2, 
                                                  index_2to1, lc_a, 
-                                                 healpix_pixels, 
+                                                 healpix_pixels, lc_healpix,
                                                  verbose = False, 
                                                  short = False, supershort = False, 
                                                  step = -1, dust_factors = 1.0,
@@ -607,13 +614,15 @@ def copy_columns_interpolation_dust_raw_heal_pix(input_fname, output_fname,
     # lc_a = 1.0/(1.0+lc_redshift)
     # input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-step1_a
-    print("del_a: ", del_a)
+    #print("del_a: ", del_a)
     h_out_gps = {}
     h_out_gps_slct = {}
-    for healpix_pixel in healpix:
-        h_out = h5py.File(output_fname,'w')
+    for healpix_pixel in healpix_pixels:
+        hp_fname = output_fname.replace("${healpix}", str(healpix_pixel))
+        print(hp_fname)
+        h_out = h5py.File(hp_fname,'w')
         h_out_gps[healpix_pixel] = h_out.create_group('galaxyProperties')
-        slct = lc_a['healpix_pixel']==healpix
+        slct = lc_healpix == healpix_pixel
         h_out_gps[healpix_pixel]['dustFactor'] = dust_factors[slct]
         h_out_gps_slct[healpix_pixel] = slct
     h_in_gp1 = h5py.File(input_fname.replace("${step}",str(step1)),'r')['galaxyProperties']
@@ -621,7 +630,6 @@ def copy_columns_interpolation_dust_raw_heal_pix(input_fname, output_fname,
 
     keys = get_keys(h_in_gp1)
     max_float = np.finfo(np.float32).max #The max float size
-
     for i in range(0,len(keys)):
         t1 = time.time()
         key = keys[i]
@@ -636,8 +644,8 @@ def copy_columns_interpolation_dust_raw_heal_pix(input_fname, output_fname,
         #If the data is a double, record it as a float to save on disk space
         if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
             new_data= new_data.astype(np.float32)
-        for healpix_pixel in healpix:
-            h_out_gps[healpix_pixel][key] = data[h_out_gps_slct[healpix_pixel]]
+        for healpix_pixel in healpix_pixels:
+            h_out_gps[healpix_pixel][key] = new_data[h_out_gps_slct[healpix_pixel]]
         print("\t\tDone writing. read+format+write: {}".format(time.time()-t1))
     return
 
@@ -654,6 +662,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_in = h5py.File(input_fname,'r')
     else:
         h_in = h5py.File(input_fname,'r')[str(internal_step)]
+    print(h_in.keys())
     sm = h_in['obs_sm'].value
     if cut_small_galaxies_mass is None:
         mask = np.ones(sm.size, dtype=bool)
@@ -754,7 +763,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['shear2'] = np.zeros(size, dtype='f4')
         h_out_gp['magnification'] = np.ones(size, dtype='f4')
         h_out_gp['convergence'] = np.zeros(size, dtype='f4')
-    if healpix:
+    elif healpix:
         h_shear = h5py.File(healpix_file, 'r')
         h_out_gp['ra'] = h_shear['ra_lensed'].value[mask]
         h_out_gp['dec'] = h_shear['dec_lensed'].value[mask]
@@ -832,25 +841,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
     # fof_tag =  dtk.read_gio(fof_loc,'fof_halo_tag')
     # fof_mass = dtk.read_gio(fof_loc,'fof_mass')
     # fof_srt = np.argsort(fof_tag)
-
-    sod_cat_tag = dtk.gio_read(sod_loc,'fof_halo_tag')
-    sod_cat_mass = dtk.gio_read(sod_loc,'sod_halo_mass')
-    sod_cat_srt = np.argsort(sod_cat_tag)
     sod_mass = -1*np.ones(halo_tag.size)
-    indx = dtk.search_sorted(sod_cat_mass,halo_tag,sorter=sod_cat_srt)
-    slct = indx != -1
-    sod_mass[slct] = sod_cat_mass[indx[slct]]
+    if os.path.isfile(sod_loc):
+        sod_cat_tag = dtk.gio_read(sod_loc,'fof_halo_tag')
+        sod_cat_mass = dtk.gio_read(sod_loc,'sod_halo_mass')
+        sod_cat_srt = np.argsort(sod_cat_tag)
+
+        indx = dtk.search_sorted(sod_cat_mass,halo_tag,sorter=sod_cat_srt)
+        slct = indx != -1
+        sod_mass[slct] = sod_cat_mass[indx[slct]]
     hgroup['hostHaloSODMass']=sod_mass
 
     print("Num of galaxies: ", halo_tag.size)
-    eg_cat_htag = dtk.gio_read(halo_shape_loc,'halo_id')
-    srt = np.argsort(eg_cat_htag)
-    indx = dtk.search_sorted(eg_cat_htag,halo_tag,sorter=srt)
-    slct_indx = indx != -1
-    indx_slct = indx[slct_indx]
-    print("num selected: ",np.sum(slct_indx))
-    
-
     eg_cat_eg1 = np.zeros(size,dtype='f4')
     eg_cat_eg2 = np.zeros(size,dtype='f4')
     eg_cat_eg3 = np.zeros(size,dtype='f4')
@@ -863,22 +865,29 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
     eg_cat_eg3_x = np.zeros(size,dtype='f4')
     eg_cat_eg3_y =np.zeros(size,dtype='f4')
     eg_cat_eg3_z =np.zeros(size,dtype='f4')
-
-    eg_cat_eg1[slct_indx] = dtk.gio_read(halo_shape_loc,'eval1')[indx_slct]
-    eg_cat_eg2[slct_indx] = dtk.gio_read(halo_shape_loc,'eval2')[indx_slct]
-    eg_cat_eg3[slct_indx] = dtk.gio_read(halo_shape_loc,'eval3')[indx_slct]
-    eg_cat_eg1_x[slct_indx] = dtk.gio_read(halo_shape_loc,'evec1x')[indx_slct]
-    eg_cat_eg1_y[slct_indx] = dtk.gio_read(halo_shape_loc,'evec1y')[indx_slct]
-    eg_cat_eg1_z[slct_indx] = dtk.gio_read(halo_shape_loc,'evec1z')[indx_slct]
-    eg_cat_eg2_x[slct_indx] = dtk.gio_read(halo_shape_loc,'evec2x')[indx_slct]
-    eg_cat_eg2_y[slct_indx] = dtk.gio_read(halo_shape_loc,'evec2y')[indx_slct]
-    eg_cat_eg2_z[slct_indx] = dtk.gio_read(halo_shape_loc,'evec2z')[indx_slct]
-    eg_cat_eg3_x[slct_indx] = dtk.gio_read(halo_shape_loc,'evec3x')[indx_slct]
-    eg_cat_eg3_y[slct_indx] = dtk.gio_read(halo_shape_loc,'evec3y')[indx_slct]
-    eg_cat_eg3_z[slct_indx] = dtk.gio_read(halo_shape_loc,'evec3z')[indx_slct]
-    rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
-    rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
-    rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
+    has_halo_shape_files = os.path.isfile(halo_shape_loc) and os.path.isfile(halo_shape_red_step_loc)
+    if has_halo_shape_files:
+        eg_cat_htag = dtk.gio_read(halo_shape_loc,'halo_id')
+        srt = np.argsort(eg_cat_htag)
+        indx = dtk.search_sorted(eg_cat_htag,halo_tag,sorter=srt)
+        slct_indx = indx != -1
+        indx_slct = indx[slct_indx]
+        print("num selected: ",np.sum(slct_indx))
+        eg_cat_eg1[slct_indx] = dtk.gio_read(halo_shape_loc,'eval1')[indx_slct]
+        eg_cat_eg2[slct_indx] = dtk.gio_read(halo_shape_loc,'eval2')[indx_slct]
+        eg_cat_eg3[slct_indx] = dtk.gio_read(halo_shape_loc,'eval3')[indx_slct]
+        eg_cat_eg1_x[slct_indx] = dtk.gio_read(halo_shape_loc,'evec1x')[indx_slct]
+        eg_cat_eg1_y[slct_indx] = dtk.gio_read(halo_shape_loc,'evec1y')[indx_slct]
+        eg_cat_eg1_z[slct_indx] = dtk.gio_read(halo_shape_loc,'evec1z')[indx_slct]
+        eg_cat_eg2_x[slct_indx] = dtk.gio_read(halo_shape_loc,'evec2x')[indx_slct]
+        eg_cat_eg2_y[slct_indx] = dtk.gio_read(halo_shape_loc,'evec2y')[indx_slct]
+        eg_cat_eg2_z[slct_indx] = dtk.gio_read(halo_shape_loc,'evec2z')[indx_slct]
+        eg_cat_eg3_x[slct_indx] = dtk.gio_read(halo_shape_loc,'evec3x')[indx_slct]
+        eg_cat_eg3_y[slct_indx] = dtk.gio_read(halo_shape_loc,'evec3y')[indx_slct]
+        eg_cat_eg3_z[slct_indx] = dtk.gio_read(halo_shape_loc,'evec3z')[indx_slct]
+        rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
+        rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
+        rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
     hgroup['hostHaloEigenValue1'] = eg_cat_eg1
     hgroup['hostHaloEigenValue2'] = eg_cat_eg2
     hgroup['hostHaloEigenValue3'] = eg_cat_eg3
@@ -891,24 +900,23 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
     hgroup['hostHaloEigenVector3X'] = eg_cat_eg3_x
     hgroup['hostHaloEigenVector3Y'] = eg_cat_eg3_y
     hgroup['hostHaloEigenVector3Z'] = eg_cat_eg3_z
-
-
-    eg_cat_htag = dtk.gio_read(halo_shape_red_step_loc,'halo_id')[indx_slct]
-    eg_cat_eg1[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'eval1')[indx_slct]
-    eg_cat_eg2[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'eval2')[indx_slct]
-    eg_cat_eg3[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'eval3')[indx_slct]
-    eg_cat_eg1_x[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec1x')[indx_slct]
-    eg_cat_eg1_y[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec1y')[indx_slct]
-    eg_cat_eg1_z[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec1z')[indx_slct]
-    eg_cat_eg2_x[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec2x')[indx_slct]
-    eg_cat_eg2_y[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec2y')[indx_slct]
-    eg_cat_eg2_z[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec2z')[indx_slct]
-    eg_cat_eg3_x[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec3x')[indx_slct]
-    eg_cat_eg3_y[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec3y')[indx_slct]
-    eg_cat_eg3_z[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec3z')[indx_slct]
-    rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
-    rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
-    rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
+    if has_halo_shape_files:
+        eg_cat_htag = dtk.gio_read(halo_shape_red_step_loc,'halo_id')[indx_slct]
+        eg_cat_eg1[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'eval1')[indx_slct]
+        eg_cat_eg2[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'eval2')[indx_slct]
+        eg_cat_eg3[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'eval3')[indx_slct]
+        eg_cat_eg1_x[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec1x')[indx_slct]
+        eg_cat_eg1_y[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec1y')[indx_slct]
+        eg_cat_eg1_z[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec1z')[indx_slct]
+        eg_cat_eg2_x[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec2x')[indx_slct]
+        eg_cat_eg2_y[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec2y')[indx_slct]
+        eg_cat_eg2_z[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec2z')[indx_slct]
+        eg_cat_eg3_x[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec3x')[indx_slct]
+        eg_cat_eg3_y[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec3y')[indx_slct]
+        eg_cat_eg3_z[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'evec3z')[indx_slct]
+        rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
+        rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
+        rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
     hgroup['hostHaloEigenValueReduced1'] = eg_cat_eg1
     hgroup['hostHaloEigenValueReduced2'] = eg_cat_eg2
     hgroup['hostHaloEigenValueReduced3'] = eg_cat_eg3
@@ -942,7 +950,8 @@ def add_native_umachine(output_fname, umachine_native, cut_small_galaxies_mass =
             hgroup['UMachineNative/'+key] = h_in[key].value[slct]
     print("done addign umachine quantities. time: {:.2f}".format(time.time()-t1))
     return
- 
+
+    
 
 def add_blackhole_quantities(output_fname, redshift, percentile_sfr):
     hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
@@ -1066,6 +1075,8 @@ def add_ellipticity_quantities(output_fname, verbose = False):
 
 def combine_step_lc_into_one(step_fname_list, out_fname):
     print("combining into one file")
+    print(out_fname)
+    print(step_fname_list)
     hfile_out = h5py.File(out_fname,'w')
     hfile_gp_out = hfile_out.create_group('galaxyProperties')
     hfile_steps = []
@@ -1603,7 +1614,9 @@ def lightcone_resample(param_file_name):
     halo_shape_fname = param.get_string("halo_shape_fname")
     halo_shape_red_fname = param.get_string("halo_shape_red_fname")
     output_fname = param.get_string('output_fname')
-    heal_pix_file = param.get_bool('heal_pix_file')
+    healpix_file = param.get_bool('healpix_file')
+    if healpix_file:
+        healpix_pixels = param.get_int_list('healpix_pixels')
     fake_lensing  = param.get_bool('fake_lensing')
     steps = param.get_int_list('steps')
     use_slope = param.get_bool('use_slope')
@@ -1634,7 +1647,7 @@ def lightcone_resample(param_file_name):
     # The other options are depricated
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
-    if heal_pix_file:
+    if healpix_file:
         assert ("${healpix}" in output_fname), "Must have ${healpix} string in output while using healpix"
     if not cut_small_galaxies: # if we don't cut out small galaxies, set the mass limit
         cut_small_galaxies_mass = None # to None as a flag for other parts in the code
@@ -1682,15 +1695,22 @@ def lightcone_resample(param_file_name):
         index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1']
         verbose = True
         # Healpix cutouts/files have the step saved inside of them.
-        if heal_pix_file:
+        if healpix_file:
             internal_file_step = step
         else:
             internal_file_step = None
         # Load the mock (UMachine + Color + Shear) into dict of arrays. 
-        lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor, 
-                                    match_obs_color_red_seq = match_obs_color_red_seq,
-                                    cut_small_galaxies_mass = cut_small_galaxies_mass, 
-                                    internal_step=internal_file_step)
+        if not(healpix_file):
+            lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor, 
+                                        match_obs_color_red_seq = match_obs_color_red_seq,
+                                        cut_small_galaxies_mass = cut_small_galaxies_mass, 
+                                        internal_step=internal_file_step)
+        else:
+            lc_data = construct_lc_data_healpix(lightcone_step_fname, verbose = verbose, recolor=recolor, 
+                                                match_obs_color_red_seq = match_obs_color_red_seq,
+                                                cut_small_galaxies_mass = cut_small_galaxies_mass, 
+                                                internal_step=internal_file_step,
+                                                healpix_pixels = healpix_pixels)
         #There is no other option. I just don't want to re-indent this entire block of code--
         #emacs doesn't re-indent python code well
         if(use_slope): 
@@ -1793,16 +1813,17 @@ def lightcone_resample(param_file_name):
                     plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);
                     plt.show()
             slct_neg = index == -1
-            print(match_dust_factors)
-            print("not assigned: {}/{}: {:.2f}".format( np.sum(slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
+            print("assigned: {}/{}: {:.2f}".format( np.sum(~slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
             assert(np.sum(slct_neg) == 0)
+            
+            
+        if not(healpix_file):
             copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
                                                 step, step2, step_a, step2_a, mask1, mask2, 
                                                 index_2to1, lc_a_cc, verbose = verbose,
                                                 short = short, supershort = supershort,
                                                 dust_factors = match_dust_factors, step = step,
                                                 luminosity_factors = match_luminosity_factors)
-        if True:
             overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
                               internal_step = internal_file_step, fake_lensing=fake_lensing)
@@ -1813,22 +1834,38 @@ def lightcone_resample(param_file_name):
             add_size_quantities(output_step_loc)
             add_ellipticity_quantities(output_step_loc)
         else:
+            copy_columns_interpolation_dust_raw_healpix(gltcs_fname, output_step_loc, index, 
+                                                        step, step2, step_a, step2_a, mask1, mask2, 
+                                                        index_2to1, lc_a_cc, 
+                                                        healpix_pixels, lc_data['healpix_pixel'],
+                                                        verbose = verbose,
+                                                        short = short, supershort = supershort,
+                                                        dust_factors = match_dust_factors, step = step,
+                                                        luminosity_factors = match_luminosity_factors)
             for healpix_pixel in healpix_pixels:
-                output_healpix_file = output_step_loc.replace("${healpix}",str(healpix_pixel))
-                overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
+                output_healpix_loc = output_step_loc.replace("${healpix}",str(healpix_pixel))
+                lightcone_healpix_fname =lightcone_step_fname.replace("${healpix}", str(healpix_pixel))
+                overwrite_columns(lightcone_healpix_fname, output_healpix_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
                               internal_step = internal_file_step, fake_lensing=fake_lensing)
-                overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
-                add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                overwrite_host_halo(output_healpix_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
+                add_native_umachine(output_healpix_loc, lightcone_healpix_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
                                 internal_step = internal_file_step)
-                add_blackhole_quantities(output_step_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'])
-                add_size_quantities(output_step_loc)
-                add_ellipticity_quantities(output_step_loc)
+                slct_healpix = lc_data['healpix_pixel'] == healpix_pixel
+                add_blackhole_quantities(output_healpix_loc, np.average(lc_data['redshift']), lc_data['sfr_percentile'][slct_healpix])
+                add_size_quantities(output_healpix_loc)
+                add_ellipticity_quantities(output_healpix_loc)
 
         if plot:
+            if healpix_file:
+                output_step_tmp = output_step_loc.replace("${healpix}", str(healpix_pixels[-1]))
+                lc_data = select_dic(lc_data, lc_data['healpix_pixel']==healpix_pixels[-1])
+            else:
+                output_step_tmp = output_step_loc 
+
             dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
             #new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
-            new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
+            new_gal_prop,new_mask = construct_gal_prop(output_step_tmp, verbose=verbose,mask=dummy_mask)
             index = np.arange(lc_data['redshift'].size)
             plt.figure()
             plt.title("Post match")
@@ -1854,9 +1891,22 @@ def lightcone_resample(param_file_name):
             dtk.save_figs('figs/'+param_file_name+"/"+__file__+"/")
             plt.show()
         print("\n=====\ndone. {}".format(time.time()-t0))
-    output_all = output_fname.replace("${step}","all")
-    combine_step_lc_into_one(output_step_list, output_all)
-    add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor)
+    if not(healpix_file):
+        output_all = output_fname.replace("${step}","all")
+        combine_step_lc_into_one(output_step_list, output_all)
+        add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor)
+    else:
+        for healpix_pixel in healpix_pixels:
+            output_healpix_loc = output_fname.replace("${healpix}",str(healpix_pixel))
+            output_all = output_healpix_loc.replace("${step}","all")
+            output_step_list = []
+            for i, step in enumerate(steps):
+                if i == 0:
+                    continue
+                output_step_list.append(output_healpix_loc.replace("${step}", str(step)))
+            combine_step_lc_into_one(output_step_list, output_all)
+            add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor)
+        
     print("\n\n========\nALL DONE. Answer correct. \ntime: {:.2f}".format(time.time()-t00))
 
 
