@@ -1,0 +1,50 @@
+lightcone_fname /cosmo/data/hacc/OuterRim/OR_Test/um_healpix_mocks_mh_14.5_min_10.1/umachine_color_mock_z_#z_range#_cutout_${healpix}.hdf5
+gltcs_fname     #gltcs_file#
+gltcs_metadata_ref  /cosmo/homes/dkorytov/proj/protoDC2/output/ANL_box_v2.1.3_nocut_mod.hdf5
+gltcs_slope_fname    NULL
+halo_shape_fname     NULL
+halo_shape_red_fname NULL
+sod_fname            NULL
+healpix_file true
+healpix_pixels 564
+fake_lensing  true
+
+steps   #step_list#
+
+
+output_fname  /cosmo/homes/dkorytov/data/cosmoDC2/protoDC2_v#v1#.#v2#.#v3#/steps_v#v1#.#v2#.#v3#/z_#z_range#.step_${step}.healpix_${healpix}.hdf5
+
+load_mask true
+mask_loc /cosmo/homes/dkorytov/data/Galacticus/mask/#z_type#/v4.14.1/mask.hdf5
+index_loc /cosmo/homes/dkorytov/data/Galacticus/index/#z_type#/index_${step}.hdf5
+use_slope true
+substeps  1
+use_substep_redshift true
+
+recolor false
+
+short     false
+supershort false
+cut_small_galaxies false
+cut_small_galaxies_mass 8 
+
+use_dust_factor true
+dust_factors 3.0 6.0
+
+ignore_mstar true
+
+match_obs_color_red_seq true
+
+rescale_bright_luminosity true
+rescale_bright_luminosity_threshold 0
+
+ignore_bright_luminosity true
+ignore_bright_luminosity_threshold -21
+
+
+plot         false
+plot_substep false
+
+version_major       #v1#
+version_minor       #v2#
+version_minor_minor #v3#
