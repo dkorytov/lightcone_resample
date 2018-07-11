@@ -572,6 +572,7 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     # lc_a = 1.0/(1.0+lc_redshift)
     # input_a = 1.0/(1.0 + input_redshift)
     del_a = lc_a-step1_a
+    dtk.ensure_dir(output_fname)
     h_out = h5py.File(output_fname,'w')
     h_out_gp = h_out.create_group('galaxyProperties')
     h_out_gp['dustFactor'] = dust_factors
@@ -619,6 +620,7 @@ def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
     h_out_gps_slct = {}
     for healpix_pixel in healpix_pixels:
         hp_fname = output_fname.replace("${healpix}", str(healpix_pixel))
+        dtk.ensure_dir(hp_fname)
         print(hp_fname)
         h_out = h5py.File(hp_fname,'w')
         h_out_gps[healpix_pixel] = h_out.create_group('galaxyProperties')
@@ -714,7 +716,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     #Calculate the oringal redshift 
     stepz = dtk.StepZ(200,0,500)
     # Precompute redshfit to luminosity distance relationship
-    zs = np.linspace(0,1.5,1000)
+    zs = np.linspace(0,3.5,1000)
     z_to_dl = interp1d(zs,cosmo.luminosity_distance(zs))
     dl = z_to_dl(redshift)
     adjust_mag = -2.5*np.log10(1.0+redshift)+5*np.log10(dl)+25.0
@@ -1816,7 +1818,7 @@ def lightcone_resample(param_file_name):
             print("assigned: {}/{}: {:.2f}".format( np.sum(~slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
             assert(np.sum(slct_neg) == 0)
             
-            
+
         if not(healpix_file):
             copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
                                                 step, step2, step_a, step2_a, mask1, mask2, 
