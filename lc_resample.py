@@ -1646,6 +1646,18 @@ def lightcone_resample(param_file_name):
     version_major = param.get_int('version_major')
     version_minor = param.get_int('version_minor')
     version_minor_minor = param.get_int('version_minor_minor')
+
+    if "concatenate_only" in param:
+        concatenate_only = param.get_bool("concatenate_only")
+    else:
+        concatenate_only = False
+
+    if "resume_at_step" in param:
+        resume_run = True
+        resume_at_step = param.get_int("resume_at_step")
+    else:
+        resume_run = False
+        resume_at_step = 0
     # The other options are depricated
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
@@ -1682,6 +1694,17 @@ def lightcone_resample(param_file_name):
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
+        if concatenate_only: 
+            print("Skipping: concatenate_only is true ")
+            continue
+
+        if resume_run and step > resume_at_step :
+            print("Skipping: we haven't reach the resume step: step {} > resume {}".format(step,resume_at_step))
+            continue
+        elif resume_run:
+            print("resuming: step {} > resume {}".format(step,resume_at_step))
+        else:
+            print("not a resume run")
         if load_mask:
             mask1 = hfile_mask['{}'.format(step)].value
             mask2 = hfile_mask['{}'.format(step2)].value
@@ -1893,6 +1916,11 @@ def lightcone_resample(param_file_name):
             dtk.save_figs('figs/'+param_file_name+"/"+__file__+"/")
             plt.show()
         print("\n=====\ndone. {}".format(time.time()-t0))
+
+    ########################################################
+    # Concatenation of the all steps into a single catalog #
+    ######################################################## 
+
     if not(healpix_file):
         output_all = output_fname.replace("${step}","all")
         combine_step_lc_into_one(output_step_list, output_all)
