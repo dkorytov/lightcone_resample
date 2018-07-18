@@ -14,6 +14,7 @@ import h5py
 import time
 import sys
 import datetime
+import subprocess
 from astropy.table import Table
 from scipy.spatial import cKDTree
 from pecZ import pecZ
@@ -420,9 +421,9 @@ def get_keys(hgroup):
 
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
                'redshiftHubble','placementType','isCentral','hostIndex', 
-               'blackHoleAccretionRate','blackHoleMass')
+               'blackHoleAccretionRate','blackHoleMass', 'step')
 copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total')
-no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle', 'step')
+no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
 def to_copy(key, short, supershort):
@@ -655,15 +656,19 @@ def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
 def overwrite_columns(input_fname, output_fname, ignore_mstar = False, 
                       verbose=False, cut_small_galaxies_mass = None, 
                       internal_step=None, fake_lensing=False, healpix=False,
-                      healpix_file = None):
+                      healpix_file = None, step = None):
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
         #sdss = Table.read(input_fname,path='data')
+    h_out = h5py.File(output_fname, 'a')
+    h_out_gp = h_out['galaxyProperties']
+
     if internal_step is None:
         h_in = h5py.File(input_fname,'r')
     else:
         h_in = h5py.File(input_fname,'r')[str(internal_step)]
+        
     print(h_in.keys())
     sm = h_in['obs_sm'].value
     if cut_small_galaxies_mass is None:
@@ -671,19 +676,22 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     else: 
         mask = np.log10(sm) > cut_small_galaxies_mass
     #redshift = np.ones(sdss['x'].quantity.size)*0.1
-    h_out = h5py.File(output_fname, 'a')
-    h_out_gp = h_out['galaxyProperties']
     t2 = time.time()
     if verbose:
         print("\t done reading in data", t2-t1)
     #xyz,v(xyz)
+    
     x = h_in['x'].value[mask]
     y = h_in['y'].value[mask]
     z = h_in['z'].value[mask]
     vx = h_in['vx'].value[mask]
     vy = h_in['vy'].value[mask]
     vz = h_in['vz'].value[mask]
+    size = h_in['ra'].size
     redshift  =h_in['redshift'].value[mask]
+    print('step: ', step)
+    assert step is not None, "Step is not specified"
+    h_out_gp['step']=np.ones(size,dtype='i4')*step
     h_out_gp['x']=x
     h_out_gp['y']=y
     h_out_gp['z']=z
@@ -781,12 +789,15 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['magnification'] = h_in['magnification'].value[mask]
         h_out_gp['convergence'] = h_in['convergence'].value[mask]
 
+    if healpix:
+        h_out_gp['galaxyID'] = h_in['galaxy_id']
     central = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
     h_out_gp['isCentral'] = central
     h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value[mask]
     h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value[mask]
     unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
     h_out_gp['NumberSelected'] = cnt[indx]
+
     tf = time.time()
     if verbose:
         print("\tDone overwrite columns", tf-t1)
@@ -953,7 +964,6 @@ def add_native_umachine(output_fname, umachine_native, cut_small_galaxies_mass =
     print("done addign umachine quantities. time: {:.2f}".format(time.time()-t1))
     return
 
-    
 
 def add_blackhole_quantities(output_fname, redshift, percentile_sfr):
     hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
@@ -1075,7 +1085,7 @@ def add_ellipticity_quantities(output_fname, verbose = False):
     return
 
 
-def combine_step_lc_into_one(step_fname_list, out_fname):
+def combine_step_lc_into_one(step_fname_list, out_fname, healpix=False):
     print("combining into one file")
     print(out_fname)
     print(step_fname_list)
@@ -1103,11 +1113,12 @@ def combine_step_lc_into_one(step_fname_list, out_fname):
         hfile_gp_out[key]=data
         #hfile_gp_out[key].attrs['units']=units
         print("\t time: {:.2f}".format(time.time()-t1))
-    hfile_gp_out['galaxyID'] = np.arange(hfile_gp_out['redshift'].size,dtype='i8')
+    if not healpix:
+        hfile_gp_out['galaxyID'] = np.arange(hfile_gp_out['redshift'].size,dtype='i8')
     return 
 
 
-def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version_minor_minor):
+def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version_minor_minor, healpix_ref=None, param_file=None):
     """
     Takes the metadata group and copies it over the final output product. 
     Also for each data column, copies the units attribute. 
@@ -1128,23 +1139,42 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
     #     hfile_out['galaxyProperties'][key].attrs['units'] = hfile_gf['galaxyProperties'][key].attrs['units']
     # #copy over metadata
     # del hfile_out['/metaData']
-    hfile_out.copy(hfile_gf['metaData'],'metaData')
-    del hfile_out['/metaData/catalogCreationDate']
-    del hfile_out['/metaData/versionChangeNotes']
-    del hfile_out['/metaData/versionMajor'] 
-    del hfile_out['/metaData/versionMinor'] 
-    del hfile_out['/metaData/versionMinorMinor'] 
-    del hfile_out['/metaData/version'] 
+    print(hfile_gf['metaData'].keys())
+    hfile_out.copy(hfile_gf['metaData/GalacticusParameters'],'/metaData/GalacticusParameters/')
+    #hfile_out.copy(hfile_gf['metaData/simulationParameters'],'/metaData/simulationParameters')
+    # del hfile_out['/metaData/catalogCreationDate']
+    # del hfile_out['/metaData/versionChangeNotes']
+    # del hfile_out['/metaData/versionMajor'] 
+    # del hfile_out['/metaData/versionMinor'] 
+    # del hfile_out['/metaData/versionMinorMinor'] 
+    # del hfile_out['/metaData/version'] 
+    # del hfile_out['/metaData/skyArea']
     # del hgroup['versionChangeNotes']
-
     hfile_out['/metaData/versionMajor'] = version_major
     hfile_out['/metaData/versionMinor'] = version_minor
     hfile_out['/metaData/versionMinorMinor'] = version_minor_minor
     hfile_out['/metaData/version'] = "{}.{}.{}".format(version_major, version_minor, version_minor_minor)
 
     hfile_out['/metaData/catalogCreationDate']=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    if healpix_ref is not None:
+        hfile_hp = h5py.File(healpix_ref,'r')['metaData']
+        hfile_out['metaData/H_0'] = hfile_hp['H_0'].value
+        hfile_out['metaData/Omega_b'] = hfile_hp['Omega_b'].value
+        hfile_out['metaData/skyArea'] = hfile_hp['skyArea'].value
+        hfile_out['metaData/cosmoDC2_Model/commit_hash'] = hfile_hp['UM_commit_has'].value
+        hfile_out['metaData/cosmoDC2_Model/seed'] = hfile_hp[''].value
+        hfile_out['metaData/cosmoDC2_Model/synthetic_halo_minimum_mass'] = hfile_hp['synthetic_halo_minimum_mass'].value
+    else:
+        hfile_out['metaData/skyArea'] = 25
+    #TODO
+    cmd = 'cd {0} && git rev-parse HEAD'.format('.')
+    commit_hash = subprocess.check_output(cmd, shell=True).strip()
 
-
+    hfile_out['/meataData/cosmodDC2_Matchup/commit_hash']= commit_hash
+    if param_file is not None:
+        with open(param_file, 'r') as pfile:
+            data = pfile.read()
+        hfile_out['/meataData/cosmodDC2_Matchup/config_file'] = data
 def add_units(out_fname):
     hfile = h5py.File(out_fname,'a')['galaxyProperties']
     #################################
@@ -1705,6 +1735,7 @@ def lightcone_resample(param_file_name):
             print("resuming: step {} > resume {}".format(step,resume_at_step))
         else:
             print("not a resume run")
+   
         if load_mask:
             mask1 = hfile_mask['{}'.format(step)].value
             mask2 = hfile_mask['{}'.format(step2)].value
@@ -1851,7 +1882,7 @@ def lightcone_resample(param_file_name):
                                                 luminosity_factors = match_luminosity_factors)
             overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
-                              internal_step = internal_file_step, fake_lensing=fake_lensing)
+                              internal_step = internal_file_step, fake_lensing=fake_lensing, step = step)
             overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
             add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
                                 internal_step = internal_file_step)
@@ -1872,7 +1903,7 @@ def lightcone_resample(param_file_name):
                 lightcone_healpix_fname =lightcone_step_fname.replace("${healpix}", str(healpix_pixel))
                 overwrite_columns(lightcone_healpix_fname, output_healpix_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
-                              internal_step = internal_file_step, fake_lensing=fake_lensing)
+                                  internal_step = internal_file_step, fake_lensing=fake_lensing, step = step)
                 overwrite_host_halo(output_healpix_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
                 add_native_umachine(output_healpix_loc, lightcone_healpix_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
                                 internal_step = internal_file_step)
@@ -1924,9 +1955,10 @@ def lightcone_resample(param_file_name):
     if not(healpix_file):
         output_all = output_fname.replace("${step}","all")
         combine_step_lc_into_one(output_step_list, output_all)
-        add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor)
+        add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor, param_file = param_file_name)
     else:
         for healpix_pixel in healpix_pixels:
+            healpix_ref = lightcone_fname.replace("${healpix}",str(healpix_pixel))
             output_healpix_loc = output_fname.replace("${healpix}",str(healpix_pixel))
             output_all = output_healpix_loc.replace("${step}","all")
             output_step_list = []
@@ -1935,7 +1967,8 @@ def lightcone_resample(param_file_name):
                     continue
                 output_step_list.append(output_healpix_loc.replace("${step}", str(step)))
             combine_step_lc_into_one(output_step_list, output_all)
-            add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor)
+            add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor, healpix_ref = healpix_ref,
+                         param_file = param_file_name)
         
     print("\n\n========\nALL DONE. Answer correct. \ntime: {:.2f}".format(time.time()-t00))
 
