@@ -510,15 +510,21 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
             pass
             #print("\t\tluminosity untouched")
     if np.sum(~np.isfinite(val_out))!=0:
+        print(key, "has a non-fininte value")
         print("{:.2e} {:.2e}".format(np.sum(~np.isfinite(val_out)), val_out.size))
-        print(np.sum(~np.isfinite(val1_no_dust)))
-        print(np.sum(~np.isfinite(dust_effect)))
-        slct = ~np.isfinite(dust_effect)
-        print(val1_no_dust[slct])
-        print(val1_dust[slct])
+        if ":dustAtlas" in key:
+            print(np.sum(~np.isfinite(val1_no_dust)))
+            print(np.sum(~np.isfinite(dust_effect)))
+            slct = ~np.isfinite(dust_effect)
+            print(val1_no_dust[slct])
+            print(val1_dust[slct])
         print(np.sum(~np.isfinite(slope)))
         print(np.sum(~np.isfinite(target_del_a)))
-        exit()
+        if "emissionLines" in key:
+            print("overwriting non-finite values with 0")
+            val_out[~np.isfinite(val_out)]=0.0
+        else
+            exit()
     #print("\t\toutput size: {:.2e}".format(val_out.size))
     print("\t\tread + format time: {}".format(time.time()-t1))
     return val_out
