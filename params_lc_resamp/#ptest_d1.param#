@@ -1,0 +1,37 @@
+lightcone_fname /cosmo/homes/dkorytov/data/cosmoDC2/protoDC2_v4/lc_mock/lc_mock_v4_${step}.hdf5
+gltcs_fname     /cosmo/homes/dkorytov/proj/protoDC2/output/ANL_box_v2.1.3_nocut_steps_old/${step}.hdf5
+gltcs_metadata_ref  /cosmo/homes/dkorytov/proj/protoDC2/output/ANL_box_v2.1.3_nocut_mod.hdf5
+gltcs_slope_fname output/k_corr_${step}.hdf5
+halo_shape_fname     /cosmo/homes/dkorytov/data/AlphaQ/halo_shapes/m000-${step}.bighaloshapes
+halo_shape_red_fname /cosmo/homes/dkorytov/data/AlphaQ/halo_shapes/m000-${step}.bighaloshapes_red
+sod_fname /cosmo/homes/dkorytov/data/AlphaQ/M200/STEP${step}/m000-${step}.sodproperties
+#steps       315     307      300      293      286      279      272      266      259      253      247
+#steps           487      475      464      453      442      432      421      411      401      392      382      373      365      355      347      338      331      323      315      307      300      293      286      279      272      266      259      253      247
+#steps  331      323      315     307     
+steps     323   315     307     
+output_fname  /cosmo/homes/dkorytov/data/cosmoDC2/protoDC2_test/ptest${step}.hdf5
+
+load_mask true
+mask_loc output/masks/mask.hdf5
+index_loc output/index/index_${step}.hdf5
+use_slope true
+substeps  10
+use_substep_redshift false
+
+recolor true3
+
+short     true
+supershort true
+
+use_dust_factor true
+dust_factors 3.0 6.0
+
+
+ignore_mstar false
+
+plot      true
+plot_substep false
+
+version_major       4
+version_minor       0
+version_minor_minor 0
