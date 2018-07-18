@@ -523,7 +523,7 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         if "emissionLines" in key:
             print("overwriting non-finite values with 0")
             val_out[~np.isfinite(val_out)]=0.0
-        else
+        else:
             exit()
     #print("\t\toutput size: {:.2e}".format(val_out.size))
     print("\t\tread + format time: {}".format(time.time()-t1))
@@ -1167,8 +1167,8 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
         hfile_out['metaData/H_0'] = hfile_hp['H_0'].value
         hfile_out['metaData/Omega_b'] = hfile_hp['Omega_b'].value
         hfile_out['metaData/skyArea'] = hfile_hp['skyArea'].value
-        hfile_out['metaData/cosmoDC2_Model/commit_hash'] = hfile_hp['UM_commit_has'].value
-        hfile_out['metaData/cosmoDC2_Model/seed'] = hfile_hp[''].value
+        hfile_out['metaData/cosmoDC2_Model/commit_hash'] = hfile_hp['commit_hash'].value
+        hfile_out['metaData/cosmoDC2_Model/seed'] = hfile_hp['seed'].value
         hfile_out['metaData/cosmoDC2_Model/synthetic_halo_minimum_mass'] = hfile_hp['synthetic_halo_minimum_mass'].value
     else:
         hfile_out['metaData/skyArea'] = 25
