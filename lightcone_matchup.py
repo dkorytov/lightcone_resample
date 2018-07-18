@@ -44,6 +44,10 @@ def load_lightcone(lc_fname, shr_fname, fake_shear):
         lc['shear2'] = np.fromfile(shr_fname.replace("${var}","sr2"),dtype='f4')
         lc['magnification'] = np.fromfile(shr_fname.replace("${var}","mra"),dtype='f4')
         lc['convergence'] = np.fromfile(shr_fname.replace("${var}","kr0"),dtype='f4')
+    keys = lc.keys()
+    size = lc[keys[0]].size
+    for key in keys:
+        assert lc[key].size == size, '{}'.format(key) 
     print("done {}".format(time.time()-t1))
     return lc
 
