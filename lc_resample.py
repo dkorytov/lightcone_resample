@@ -422,7 +422,8 @@ def get_keys(hgroup):
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
                'redshiftHubble','placementType','isCentral','hostIndex', 
                'blackHoleAccretionRate','blackHoleMass', 'step')
-copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total')
+#TODO re-allow nitrogen contamination
+copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total', 'ContinuumLuminosity', 'contam_nitrogenII6584')
 no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
@@ -653,6 +654,8 @@ def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
         #If the data is a double, record it as a float to save on disk space
         if(new_data.dtype == np.float64 and np.sum(new_data[slct_finite]>max_float) == 0):
             new_data= new_data.astype(np.float32)
+        if 'LineLuminosity' in key:
+            key = key.replace(':rest', '')
         for healpix_pixel in healpix_pixels:
             h_out_gps[healpix_pixel][key] = new_data[h_out_gps_slct[healpix_pixel]]
         print("\t\tDone writing. read+format+write: {}".format(time.time()-t1))
