@@ -662,7 +662,8 @@ def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
 def overwrite_columns(input_fname, output_fname, ignore_mstar = False, 
                       verbose=False, cut_small_galaxies_mass = None, 
                       internal_step=None, fake_lensing=False, healpix=False,
-                      healpix_file = None, step = None):
+                      step = None, healpix_shear_file = None, 
+                      no_shear_steps=None):
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
@@ -771,7 +772,16 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     h_out_gp['redshiftHubble'] = redshift
     h_out_gp['ra_true'] = h_in['ra'].value[mask]
     h_out_gp['dec_true'] = h_in['dec'].value[mask]
+    print("step in no_shear_steps", (step in no_shear_steps))
+    print(step, no_shear_steps)
+    print(step in no_shear_steps)
+    if no_shear_steps is not None:
+        fake_lensing = fake_lensing or (step in no_shear_steps)
+        if (step in no_shear_steps):
+            print("==== no shear step ====", step)
+
     if fake_lensing:
+        print("\tfake shears")
         size = h_in['ra'].size
         h_out_gp['ra'] = h_in['ra'].value[mask]
         h_out_gp['dec'] = h_in['dec'].value[mask]
@@ -780,14 +790,20 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['magnification'] = np.ones(size, dtype='f4')
         h_out_gp['convergence'] = np.zeros(size, dtype='f4')
     elif healpix:
-        h_shear = h5py.File(healpix_file, 'r')
-        h_out_gp['ra'] = h_shear['ra_lensed'].value[mask]
-        h_out_gp['dec'] = h_shear['dec_lensed'].value[mask]
-        h_out_gp['shear1'] = h_shear['shear1'].value[mask]
-        h_out_gp['shear2'] = h_shear['shear2'].value[mask]
-        h_out_gp['magnification'] = h_shear['magnification'].value[mask]
-        h_out_gp['convergence'] = h_shear['convergence'].value[mask]
+        print("\thealpix shears")
+        h_shear = h5py.File(healpix_shear_file, 'r')[str(step)]
+        h_out_gp['ra'] = h_shear['ra'].value[mask]
+        h_out_gp['dec'] = h_shear['dec'].value[mask]
+        s1 = h_shear['shear_1'].value[mask]
+        s2 = h_shear['shear_2'].value[mask]
+        k = h_shear['conv'].value[mask]
+        u = 1.0/((1.0-k)**2 - s1**2 -s2**2)
+        h_out_gp['shear1'] = s1
+        h_out_gp['shear2'] = s2
+        h_out_gp['magnification'] = u
+        h_out_gp['convergence'] = k
     else:
+        print('\tprotoDC2 shear style')
         h_out_gp['ra'] = h_in['ra_lensed'].value[mask]
         h_out_gp['dec'] = h_in['dec_lensed'].value[mask]
         h_out_gp['shear1'] = h_in['shear1'].value[mask]
@@ -796,7 +812,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['convergence'] = h_in['convergence'].value[mask]
 
     if healpix:
-        h_out_gp['galaxyID'] = h_in['galaxy_id']
+        h_out_gp['galaxyID'] = h_in['galaxy_id'].value
     central = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
     h_out_gp['isCentral'] = central
     h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value[mask]
@@ -1172,15 +1188,19 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
         hfile_out['metaData/cosmoDC2_Model/synthetic_halo_minimum_mass'] = hfile_hp['synthetic_halo_minimum_mass'].value
     else:
         hfile_out['metaData/skyArea'] = 25
-    #TODO
-    cmd = 'cd {0} && git rev-parse HEAD'.format('.')
-    commit_hash = subprocess.check_output(cmd, shell=True).strip()
-
-    hfile_out['/meataData/cosmodDC2_Matchup/commit_hash']= commit_hash
+    try:
+        cmd = 'git rev-parse HEAD'
+        commit_hash = subprocess.check_output(cmd, shell=True).strip()
+    except subprocess.CalledProcessError as cpe:
+        with open('git_commit.txt') as gcf:
+            commit_hash = gcf.read()
+    print("commit hash: ", commit_hash)
+    hfile_out['/metaData/cosmodDC2_Matchup/commit_hash']= commit_hash
     if param_file is not None:
         with open(param_file, 'r') as pfile:
             data = pfile.read()
-        hfile_out['/meataData/cosmodDC2_Matchup/config_file'] = data
+        hfile_out['/metaData/cosmodDC2_Matchup/config_file'] = data
+
 def add_units(out_fname):
     hfile = h5py.File(out_fname,'a')['galaxyProperties']
     #################################
@@ -1694,6 +1714,17 @@ def lightcone_resample(param_file_name):
     else:
         resume_run = False
         resume_at_step = 0
+    
+    if 'no_shear_steps' in param:
+        no_shear_steps = param.get_int_list('no_shear_steps')
+    else:
+        no_shear_steps = np.zeros(0,'i4')
+    
+    if 'healpix_shear_file' in param:
+        healpix_shear_file = param.get_string('healpix_shear_file')
+    else:
+        healpix_shear_file = None
+    
     # The other options are depricated
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
@@ -1888,7 +1919,8 @@ def lightcone_resample(param_file_name):
                                                 luminosity_factors = match_luminosity_factors)
             overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
-                              internal_step = internal_file_step, fake_lensing=fake_lensing, step = step)
+                              internal_step = internal_file_step, fake_lensing=fake_lensing, step = step,
+                              no_shear_steps = no_shear_steps)
             overwrite_host_halo(output_step_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
             add_native_umachine(output_step_loc, lightcone_step_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
                                 internal_step = internal_file_step)
@@ -1908,8 +1940,11 @@ def lightcone_resample(param_file_name):
                 output_healpix_loc = output_step_loc.replace("${healpix}",str(healpix_pixel))
                 lightcone_healpix_fname =lightcone_step_fname.replace("${healpix}", str(healpix_pixel))
                 overwrite_columns(lightcone_healpix_fname, output_healpix_loc, ignore_mstar = ignore_mstar,
-                              verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
-                                  internal_step = internal_file_step, fake_lensing=fake_lensing, step = step)
+                                  verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
+                                  internal_step = internal_file_step, fake_lensing=fake_lensing, step = step, 
+                                  healpix = True,
+                                  no_shear_steps = no_shear_steps,
+                                  healpix_shear_file = healpix_shear_file.replace("${healpix}", str(healpix_pixel)))
                 overwrite_host_halo(output_healpix_loc,sod_step_loc, halo_shape_step_loc, halo_shape_red_step_loc, verbose=verbose)
                 add_native_umachine(output_healpix_loc, lightcone_healpix_fname, cut_small_galaxies_mass = cut_small_galaxies_mass,
                                 internal_step = internal_file_step)
@@ -1972,7 +2007,7 @@ def lightcone_resample(param_file_name):
                 if i == 0:
                     continue
                 output_step_list.append(output_healpix_loc.replace("${step}", str(step)))
-            combine_step_lc_into_one(output_step_list, output_all)
+            combine_step_lc_into_one(output_step_list, output_all, healpix=True)
             add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor, healpix_ref = healpix_ref,
                          param_file = param_file_name)
         
