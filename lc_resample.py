@@ -1195,7 +1195,7 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
         cmd = 'git rev-parse HEAD'
         commit_hash = subprocess.check_output(cmd, shell=True).strip()
     except subprocess.CalledProcessError as cpe:
-        with open('git_commit.txt') as gcf:
+        with open('git_commit_hash.txt') as gcf:
             commit_hash = gcf.read()
     print("commit hash: ", commit_hash)
     hfile_out['/metaData/cosmodDC2_Matchup/commit_hash']= commit_hash
