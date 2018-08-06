@@ -61,11 +61,13 @@ def cat_dics(dics, keys = None):
         new_dic[key] = np.concatenate(new_dic[key])
     return new_dic
 
+
 def select_dic(dic, slct):
     new_dic = {}
     for key in dic.keys():
         new_dic[key]=dic[key][slct]
     return new_dic
+
 
 def clean_up_gal_prop(gal_prop):
     """For each galaxy, if any property is not finite, set all other
@@ -296,9 +298,40 @@ def select_by_index(data,index):
     return new_data
 
 
+def squash_magnitudes(mag_dic, lim, a):
+    # I'm using a tanh function for the soft threshold. No magnitude will excessed 
+    # 'lim'. Mags below lim-a aren't affect.  
+    # plt.figure()
+    # plt.hist2d(mag_dic[:,0],mag_dic[:,1],bins=250,cmap='Blues',norm=clr.LogNorm())
+    # plt.axvline(x=lim+a,c='k',ls=':')
+    # plt.axvline(x=lim,c='k',ls='--')
+    # xlims = plt.xlim()
+    # plt.title("before magnitude squash")
+    # plt.xlabel('Mag_r')
+    # plt.ylabel('g-r rest')
+    if(a == 0.0):
+        slct = mag_dic[:,0]<lim
+        mag_dic[slct,0]= lim 
+    else:
+        slct = mag_dic[:,0]<lim+a
+        mag_dic[slct,0]=a*np.tanh((mag_dic[slct,0]-lim-a)/a) + lim + a
+    # plt.figure()
+    # plt.hist2d(mag_dic[:,0],mag_dic[:,1],bins=250,cmap='Blues',norm=clr.LogNorm())
+    # plt.axvline(x=lim+a,c='k',ls=':')
+    # plt.axvline(x=lim,c='k',ls='--')
+    # plt.xlim(xlims)
+    # plt.title("after magntiude squash")
+    # plt.xlabel('Mag_r')
+    # plt.ylabel('g-r rest')
+
+    # plt.show()
+    return mag_dic
+
+
 def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = False,
                    ignore_bright_luminosity=False,
-                   ignore_bright_luminosity_threshold=False):
+                   ignore_bright_luminosity_threshold=None,
+                   ignore_bright_luminosity_softness=0.0, ):
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling")
@@ -323,10 +356,12 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
                             gal_prop['clr_ri'],
                             gal_prop['m_star']),axis=1)
     if ignore_bright_luminosity:
-        slct_lc_mat = lc_mat[:,0]<ignore_bright_luminosity_threshold
-        lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
-        slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
-        gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
+        lc_mat = squash_magnitudes(lc_mat, ignore_bright_luminosity_threshold, ignore_bright_luminosity_softness)
+        gal_mat = squash_magnitudes(gal_mat, ignore_bright_luminosity_threshold, ignore_bright_luminosity_softness)
+        # slct_lc_mat = lc_mat[:,0]<ignore_bright_luminosity_threshold
+        # lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
+        # slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
+        # gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
     if verbose:
         t2 = time.time()
         print('\tdone formating data. {}'.format(t2-t1))
@@ -361,7 +396,8 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
 def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, nnk = 10, 
                                        verbose = False,
                                        ignore_bright_luminosity=False,
-                                       ignore_bright_luminosity_threshold=False):
+                                       ignore_bright_luminosity_threshold=False,
+                                       ignore_bright_luminosity_softness=0.0):
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling with obs colors")
@@ -387,10 +423,18 @@ def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, 
     lc_mat = np.transpose(lc_data_list)
     gal_mat = np.transpose(gal_prop_list)
     if ignore_bright_luminosity:
-        slct_lc_mat = lc_mat[:,0]<ignore_bright_luminosity_threshold
-        lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
-        slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
-        gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
+        if(ignore_bright_luminosity_softness == 0.0):
+            slct_lc_mat = lc_mat[:,0]<ignore_bright_luminosity_threshold
+            lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
+            slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
+            gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
+        else:
+            lim = ignore_bright_luminosity_threshold
+            a = ignore_bright_luminosity_softness
+            slct_lc_mat = lc_mat[:,0]<lim+a
+            lc_mat[slct_lc_mat,0]=a*np.tanh((lc_mat[slct_lc_mat,0]-lim-a)/a) + lim +a
+            slct_gal_mat = gal_mat[:,0]<lim+a
+            gal_mat[slct_gal_mat,0]=a*np.tanh((gal_mat[slct_gal_mat,0]-lim-a)/a) + lim +a
     if verbose:
         t2 = time.time()
         print("\tdone formatting data. {}".format(t2-t1))
@@ -429,7 +473,7 @@ no_slope_ptrn  =('morphology','hostHalo','infall')
 
 def to_copy(key, short, supershort):
     if short:
-        if "LSST" in key or "SED" in key or "other" in key or "Lines" in key:
+        if "SED" in key or "other" in key or "Lines" in key:
             print("\tnot copied: short var cut")
             return False
     if supershort:
@@ -1204,6 +1248,7 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
             data = pfile.read()
         hfile_out['/metaData/cosmodDC2_Matchup/config_file'] = data
 
+
 def add_units(out_fname):
     hfile = h5py.File(out_fname,'a')['galaxyProperties']
     #################################
@@ -1701,7 +1746,11 @@ def lightcone_resample(param_file_name):
     rescale_bright_luminosity_threshold = param.get_float('rescale_bright_luminosity_threshold')
     ignore_bright_luminosity = param.get_bool('ignore_bright_luminosity')
     ignore_bright_luminosity_threshold = param.get_float('ignore_bright_luminosity_threshold')
-
+    if 'ignore_bright_luminosity_softness' in param:
+        ignore_bright_luminosity_softness = param.get_float('ignore_bright_luminosity_softness')
+    else:
+        print('default value for ignore_bright_luminosity_softness')
+        ignore_bright_luminosity_softness = 0.0
     version_major = param.get_int('version_major')
     version_minor = param.get_int('version_minor')
     version_minor_minor = param.get_int('version_minor_minor')
@@ -1727,7 +1776,12 @@ def lightcone_resample(param_file_name):
         healpix_shear_file = param.get_string('healpix_shear_file')
     else:
         healpix_shear_file = None
-    
+    if "red_seq_host_mass_cut" in param:
+        red_seq_host_mass_cut = param.get_float('red_seq_host_mass_cut')
+    else:
+        print('default value for red_seq_host_mass_cut')
+        red_seq_host_mass_cut = 3e13
+
     # The other options are depricated
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
@@ -1856,7 +1910,8 @@ def lightcone_resample(param_file_name):
                                             ignore_mstar = ignore_mstar, 
                                             verbose = verbose, 
                                             ignore_bright_luminosity=ignore_bright_luminosity, 
-                                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold)
+                                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
+                                            ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
                 #If we are matching on observed colors for cluster red seqence guys:
                 if match_obs_color_red_seq:
                     #Create a lc_data with only cluster red sequence galaxies
@@ -1870,15 +1925,15 @@ def lightcone_resample(param_file_name):
                             ignore_mstar = ignore_mstar,
                             verbose = verbose,
                             ignore_bright_luminosity=ignore_bright_luminosity,
-                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold)
+                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
+                            ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
                         index_abin[slct_clstr_red_squence] = index_abin_crs
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
                     # offset the index for the extra dust gal_prop 
                     print('index_abin: ', np.min(index_abin), np.max(index_abin))
                     print('gal_prop_a: ', np.min(gal_prop_a['index']), np.max(gal_prop_a['index']))
-                    a = gal_prop_a['index'][index_abin]
-                    index[slct_lc_abin] = a
+                    index[slct_lc_abin] = gal_prop_a['index'][index_abin]
                     # = index_abin%(index_abin.size//(1+len(dust_factors)))
                     # Record the dust factor for the matched galaxy so that it can be applied 
                     # to other columns in copy_columns()
