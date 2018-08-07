@@ -524,15 +524,19 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         val2_no_dust = h_in_gp2[key].value[index][mask_tot]
         dust_effect = val1_dust/val1_no_dust
         dust_effect[val1_no_dust == 0] = 1
-        #dust_effect = val1_dust - val1_no_dust
         slope = (val2_no_dust - val1_no_dust)/step_del_a
         slope[step_del_a ==0] =0
+
         if kdtree_index is None:
-            val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_factors)
-            #val_out = 10**(val1_no_dust + slope*target_del_a + dust_effect*dust_factor)
+            tot_dust_effect = dust_effect**dust_factors
+            slct = dust_effect > 1.0
+            tot_dust_effect[slct] = dust_effect[slct]
+            val_out = (val1_no_dust + slope*target_del_a)*tot_dust_effect
         else:
-            val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*(dust_effect[kdtree_index]**dust_factors)
-            #val_out = 10**(val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a + dust_effect[kdtree_index]*dust_factor)
+            tot_dust_effect = (dust_effect[kdtree_index]**dust_factors)
+            slct = dust_effect[kdtree_index] > 1.0
+            tot_dust_effect[slct] = dust_effect[kdtree_index][slct]
+            val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*tot_dust_effect
     else:
         #print('\t\tinerpolation without dust')
         val1_data = h_in_gp1[key].value[mask_tot]
