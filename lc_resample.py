@@ -188,6 +188,17 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
         gal_prop['clr_gr_obs'] = mag_g_obs - mag_r_obs
         gal_prop['clr_ri_obs'] = mag_r_obs - mag_i_obs
         gal_prop['clr_iz_obs'] = mag_i_obs - mag_z_obs
+        # Record LSST g-r color
+        lum_g_obs_d_lsst = get_column_interpolation_dust_raw(
+            'LSST_filters/diskLuminositiesStellar:LSST_g:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        lum_r_obs_d_lsst = get_column_interpolation_dust_raw(
+            'LSST_filters/diskLuminositiesStellar:LSST_r:observed:dustAtlas',
+            h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+            target_a, dust_factor)
+        gal_prop['clr_gr_obs_lsst'] = -2.5*np.log10(lum_g_obs_d_lsst) + 2.5*np.log10( lum_r_obs_d_lsst)
+
     if not (cut_small_galaxies_mass is None):
         print("cutting out small galaxies in gltcs")
         slct_gal = gal_prop['m_star']>cut_small_galaxies_mass
@@ -344,13 +355,10 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
         t1 = time.time()
         print("Starting kdtree resampling")
         print("\n Num LC Galaxies: {:.2e} Num Gltcs Galaxies: {:.2e}".format(lc_data['m_star'].size, gal_prop['m_star'].size))
-    # print("lc_data size: {}".format(lc_data['m_star'].size))
-    # print("gal_prop size: {}".format(gal_prop['m_star'].size))
     m_star = lc_data['m_star']
     mag_r  = lc_data['Mag_r']
     clr_gr = lc_data['clr_gr']
     clr_ri = lc_data['clr_ri']
-    print("ignore_mstar: ", ignore_mstar)
     if ignore_mstar:
         print("Ignoring Mstar!")
         lc_mat = np.stack((mag_r,clr_gr,clr_ri),axis=1)
@@ -363,6 +371,7 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
                             gal_prop['clr_gr'],
                             gal_prop['clr_ri'],
                             gal_prop['m_star']),axis=1)
+    print("lc shape: ", np.shape(lc_mat.shape))
     if ignore_bright_luminosity:
         lc_mat = squash_magnitudes(lc_mat, ignore_bright_luminosity_threshold, ignore_bright_luminosity_softness)
         gal_mat = squash_magnitudes(gal_mat, ignore_bright_luminosity_threshold, ignore_bright_luminosity_softness)
@@ -370,10 +379,12 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
         # lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
         # slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
         # gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
+    print("lc shape: ", np.shape(lc_mat.shape))
     if verbose:
         t2 = time.time()
         print('\tdone formating data. {}'.format(t2-t1))
         print("data size: {:.2e}".format(m_star.size))
+
     # if the search size is large enough, it's saves total time to construct a 
     # faster to search tree. Otherwise build a quick tree. 
 
@@ -411,18 +422,37 @@ def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, 
         print("Starting kdtree resampling with obs colors")
     lc_data_list = []
     gal_prop_list = []
+
+    # lc_data_list += (lc_data['Mag_r']/3.0,
+    #                  lc_data['clr_gr']/2.0,
+    #                  lc_data['clr_ri'],
+    #                  lc_data['clr_gr_obs'],
+    #                  lc_data['clr_ri_obs'],
+    #                  lc_data['clr_iz_obs']/2.0)
+    # #slct_valid = np.abs(gal_prop['clr_gr_obs_lsst'] - gal_prop['clr_gr_obs'] )
+    # #print("valid cut on rs: ", np.sum(slct_valid)/slct_valid.size)
+    # #orignal_index = np.arange(gal_prop['Mag_r'].size, dtype='i4')
+    # gal_prop_list += (gal_prop['Mag_r'][slct_valid]/3.0,
+    #                   gal_prop['clr_gr'][slct_valid]/2.0,
+    #                   gal_prop['clr_ri'][slct_valid],
+    #                   gal_prop['clr_gr_obs'][slct_valid],
+    #                   gal_prop['clr_ri_obs'][slct_valid],
+    #                   gal_prop['clr_iz_obs'][slct_valid]/2.0)
     lc_data_list += (lc_data['Mag_r'],
                      lc_data['clr_gr'],
                      lc_data['clr_ri'],
                      lc_data['clr_gr_obs'],
                      lc_data['clr_ri_obs'],
                      lc_data['clr_iz_obs'])
+    #slct_valid = np.abs(gal_prop['clr_gr_obs_lsst'] - gal_prop['clr_gr_obs'] )
+    #print("valid cut on rs: ", np.sum(slct_valid)/slct_valid.size)
+    #orignal_index = np.arange(gal_prop['Mag_r'].size, dtype='i4')
     gal_prop_list += (gal_prop['Mag_r'],
                       gal_prop['clr_gr'],
                       gal_prop['clr_ri'],
                       gal_prop['clr_gr_obs'],
                       gal_prop['clr_ri_obs'],
-                      gal_prop['clr_iz_obs'])
+                      gal_prop['clr_iz_obs'],)
     if ignore_mstar:
         pass
     else:
@@ -459,8 +489,8 @@ def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, 
         aa = np.arange(dist.shape[0])
         #dist = dist[aa,rand]
         index = index[aa,rand]
+    # return orignal_index[slct_valid][index]
     return index
-
         
 def get_keys(hgroup):
     keys = []
@@ -516,8 +546,10 @@ def to_copy(key, short, supershort):
 # Keys that have their luminosity adjusted
 luminosity_factors_keys = ['Luminosities', 'Luminosity']
 
+_cached_column = {}
+
 def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors, kdtree_index=None, 
-                                      luminosity_factors = None):
+                                      luminosity_factors = None, cache = False):
     """This function returns the interpolated quantity between two
     timesteps, from step1 to step2. Some galaxies are masked out: Any
     galaxy that doesn't pass the mask in step1 (mask1), any galaxy
@@ -1974,6 +2006,7 @@ def lightcone_resample(param_file_name):
                     # offset the index for the extra dust gal_prop 
                     print('index_abin: ', np.min(index_abin), np.max(index_abin))
                     print('gal_prop_a: ', np.min(gal_prop_a['index']), np.max(gal_prop_a['index']))
+                    print('gal_prop_a size: ', gal_prop_a['index'].size, "index_abin size: ", index_abin.size)
                     index[slct_lc_abin] = gal_prop_a['index'][index_abin]
                     # = index_abin%(index_abin.size//(1+len(dust_factors)))
                     # Record the dust factor for the matched galaxy so that it can be applied 
