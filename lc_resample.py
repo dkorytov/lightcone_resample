@@ -26,6 +26,7 @@ from cosmodc2.size_modeling import mc_size_vs_luminosity_late_type, mc_size_vs_l
 from cosmodc2.sdss_colors import assign_restframe_sdss_gri
 from cosmodc2.mock_diagnostics import mean_des_red_sequence_gr_color_vs_redshift, mean_des_red_sequence_ri_color_vs_redshift, mean_des_red_sequence_iz_color_vs_redshift
 from ellipticity_model import monte_carlo_ellipticity_bulge_disk
+from halotools.utils import fuzzy_digitize
 import galmatcher 
 
 def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
@@ -201,7 +202,7 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
 
 def construct_lc_data(fname, match_obs_color_red_seq = False, 
                       verbose = False, recolor=False, internal_step=None,
-                      cut_small_galaxies_mass = None):
+                      cut_small_galaxies_mass = None, red_sequence_transition_mass_start=13.0,  red_sequence_transition_mass_end=13.5):
     t1 = time.time()
     lc_data = {}
     if internal_step is None:
@@ -247,7 +248,8 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         host_halo_mvir_mock = hfile['host_halo_mvir'].value    
         is_on_red_seq_gr = hfile['is_on_red_sequence_gr'].value
         is_on_red_seq_ri = hfile['is_on_red_sequence_ri'].value
-        lc_data['is_cluster_red_sequence'] = (np.log10(host_halo_mvir_mock) > 13.5) & is_on_red_seq_gr & is_on_red_seq_ri
+        mass_rs = soft_transition(np.log10(host_halo_mvir_mock), red_sequence_transition_mass_start,  red_sequence_transition_mass_end)
+        lc_data['is_cluster_red_sequence'] = mass_rs & is_on_red_seq_gr & is_on_red_seq_ri
         #lc_data['is_cluster_red_sequence'] = is_on_red_seq_gr & is_on_red_seq_ri
         lc_data['clr_gr_obs'] = mean_des_red_sequence_gr_color_vs_redshift(lc_data['redshift'])
         lc_data['clr_ri_obs'] = mean_des_red_sequence_ri_color_vs_redshift(lc_data['redshift'])
@@ -264,12 +266,15 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
 
 def construct_lc_data_healpix(fname, match_obs_color_red_seq = False, 
                               verbose = False, recolor=False, internal_step=None,
-                              cut_small_galaxies_mass = None, healpix_pixels=None):
+                              cut_small_galaxies_mass = None, healpix_pixels=None, 
+                              red_sequence_transition_mass_start=13.0,  red_sequence_transition_mass_end=13.5):
     print("Construicting light cone data: ",healpix_pixels)
     if healpix_pixels is None:
         lc_data = construct_lc_data(fname, match_obs_color_red_seq = match_obs_color_red_seq,
                                     verbose = verbose, recolor=recolor, internal_step = internal_step,
-                                    cut_small_galaxies_mass = cut_small_galaxies_mass)
+                                    cut_small_galaxies_mass = cut_small_galaxies_mass,
+                                    red_sequence_transition_mass_start = red_sequence_transition_mass_start,
+                                    red_sequence_transition_mass_end = red_sequence_transition_mass_end)
     else:
         lc_data_hps = []
         for healpix_pixel in healpix_pixels:
@@ -277,7 +282,10 @@ def construct_lc_data_healpix(fname, match_obs_color_red_seq = False,
             print(fname_healpix)
             lc_data_hp = construct_lc_data(fname_healpix, match_obs_color_red_seq = match_obs_color_red_seq,
                                            verbose = verbose, recolor=recolor, internal_step = internal_step,
-                                           cut_small_galaxies_mass = cut_small_galaxies_mass)
+                                           cut_small_galaxies_mass = cut_small_galaxies_mass,
+                                           red_sequence_transition_mass_start = red_sequence_transition_mass_start,
+                                           red_sequence_transition_mass_end = red_sequence_transition_mass_end)
+
             lc_data_hp['healpix_pixel'] = np.ones(lc_data_hp['m_star'].size, dtype='i4')*healpix_pixel
             lc_data_hps.append(lc_data_hp)
         lc_data = cat_dics(lc_data_hps)
@@ -461,6 +469,25 @@ def get_keys(hgroup):
             keys.append(name)
     hgroup.visititems(_collect_keys)
     return keys
+
+
+def soft_transition(vals, trans_start, trans_end):
+    if(vals.size ==0):
+        return np.ones(vals.size,dytpe='bool')
+    slct_between = (vals>trans_start) & (vals<trans_end)
+    if(trans_start == trans_end or np.sum(slct_between) == 0):
+        return vals>trans_start
+    elif(trans_start > trans_end):
+        raise ValueError('Trans_start value is greater than trans_end')
+    else:
+        print(trans_start, trans_end)
+        print(vals.size)
+
+        bins = fuzzy_digitize(vals[slct_between],[trans_start,trans_end])
+        result = np.ones(vals.size, dtype='bool')
+        result[vals<=trans_start] = False
+        result[slct_between] = bins==1
+        return result
 
 
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
@@ -1780,11 +1807,16 @@ def lightcone_resample(param_file_name):
         healpix_shear_file = param.get_string('healpix_shear_file')
     else:
         healpix_shear_file = None
-    if "red_seq_host_mass_cut" in param:
-        red_seq_host_mass_cut = param.get_float('red_seq_host_mass_cut')
+    if "red_sequence_transition_mass_start" in param:
+        red_sequence_transition_mass_start = param.get_float('red_sequence_transition_mass_start')
+        red_sequence_transition_mass_end = param.get_float('red_sequence_transition_mass_end')
     else:
-        print('default value for red_seq_host_mass_cut')
-        red_seq_host_mass_cut = 3e13
+        red_sequence_transition_mass_start = 13.5
+        red_sequence_transition_mass_end = 13.5
+
+    red_sequence_transition_mass_start = red_sequence_transition_mass_start,
+    red_sequence_transition_mass_end = red_sequence_transition_mass_end
+
 
     # The other options are depricated
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
@@ -1858,13 +1890,18 @@ def lightcone_resample(param_file_name):
             lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor, 
                                         match_obs_color_red_seq = match_obs_color_red_seq,
                                         cut_small_galaxies_mass = cut_small_galaxies_mass, 
-                                        internal_step=internal_file_step)
+                                        internal_step=internal_file_step,
+                                        red_sequence_transition_mass_start = red_sequence_transition_mass_start,
+                                        red_sequence_transition_mass_end = red_sequence_transition_mass_end)
         else:
             lc_data = construct_lc_data_healpix(lightcone_step_fname, verbose = verbose, recolor=recolor, 
                                                 match_obs_color_red_seq = match_obs_color_red_seq,
                                                 cut_small_galaxies_mass = cut_small_galaxies_mass, 
                                                 internal_step=internal_file_step,
-                                                healpix_pixels = healpix_pixels)
+                                                healpix_pixels = healpix_pixels,
+                                                red_sequence_transition_mass_start = red_sequence_transition_mass_start,
+                                                red_sequence_transition_mass_end = red_sequence_transition_mass_end)
+
         #There is no other option. I just don't want to re-indent this entire block of code--
         #emacs doesn't re-indent python code well
         if(use_slope): 
