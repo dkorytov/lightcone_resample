@@ -270,6 +270,9 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         # Cutting out low mass galaxies so it runs fasters
         slct_gals = lc_data['m_star']>cut_small_galaxies_mass
         lc_data = dic_select(lc_data, slct_gals)
+    #TODO remove once bug is fixed
+    slct_finite = np.isfinite(lc_data['Mag_r'])
+    lc_data = dic_select(lc_data, slct_finite)
     if verbose:
         print('done loading lc data. {}'.format(time.time()-t1))
     return lc_data
