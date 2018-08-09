@@ -998,7 +998,7 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
         indx = dtk.search_sorted(sod_cat_mass,halo_tag,sorter=sod_cat_srt)
         slct = indx != -1
         sod_mass[slct] = sod_cat_mass[indx[slct]]
-    hgroup['hostHaloSODMass']=sod_mass
+        hgroup['hostHaloSODMass']=sod_mass
 
     print("Num of galaxies: ", halo_tag.size)
     eg_cat_eg1 = np.zeros(size,dtype='f4')
@@ -1036,18 +1036,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
         rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
         rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
         rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
-    hgroup['hostHaloEigenValue1'] = eg_cat_eg1
-    hgroup['hostHaloEigenValue2'] = eg_cat_eg2
-    hgroup['hostHaloEigenValue3'] = eg_cat_eg3
-    hgroup['hostHaloEigenVector1X'] = eg_cat_eg1_x
-    hgroup['hostHaloEigenVector1Y'] = eg_cat_eg1_y
-    hgroup['hostHaloEigenVector1Z'] = eg_cat_eg1_z
-    hgroup['hostHaloEigenVector2X'] = eg_cat_eg2_x
-    hgroup['hostHaloEigenVector2Y'] = eg_cat_eg2_y
-    hgroup['hostHaloEigenVector2Z'] = eg_cat_eg2_z
-    hgroup['hostHaloEigenVector3X'] = eg_cat_eg3_x
-    hgroup['hostHaloEigenVector3Y'] = eg_cat_eg3_y
-    hgroup['hostHaloEigenVector3Z'] = eg_cat_eg3_z
+        hgroup['hostHaloEigenValue1'] = eg_cat_eg1
+        hgroup['hostHaloEigenValue2'] = eg_cat_eg2
+        hgroup['hostHaloEigenValue3'] = eg_cat_eg3
+        hgroup['hostHaloEigenVector1X'] = eg_cat_eg1_x
+        hgroup['hostHaloEigenVector1Y'] = eg_cat_eg1_y
+        hgroup['hostHaloEigenVector1Z'] = eg_cat_eg1_z
+        hgroup['hostHaloEigenVector2X'] = eg_cat_eg2_x
+        hgroup['hostHaloEigenVector2Y'] = eg_cat_eg2_y
+        hgroup['hostHaloEigenVector2Z'] = eg_cat_eg2_z
+        hgroup['hostHaloEigenVector3X'] = eg_cat_eg3_x
+        hgroup['hostHaloEigenVector3Y'] = eg_cat_eg3_y
+        hgroup['hostHaloEigenVector3Z'] = eg_cat_eg3_z
     if has_halo_shape_files:
         eg_cat_htag = dtk.gio_read(halo_shape_red_step_loc,'halo_id')[indx_slct]
         eg_cat_eg1[slct_indx] = dtk.gio_read(halo_shape_red_step_loc,'eval1')[indx_slct]
@@ -1065,18 +1065,18 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
         rotate_host_halo(halo_rot, eg_cat_eg1_x, eg_cat_eg1_y, eg_cat_eg1_z)
         rotate_host_halo(halo_rot, eg_cat_eg2_x, eg_cat_eg2_y, eg_cat_eg2_z)
         rotate_host_halo(halo_rot, eg_cat_eg3_x, eg_cat_eg3_y, eg_cat_eg3_z)
-    hgroup['hostHaloEigenValueReduced1'] = eg_cat_eg1
-    hgroup['hostHaloEigenValueReduced2'] = eg_cat_eg2
-    hgroup['hostHaloEigenValueReduced3'] = eg_cat_eg3
-    hgroup['hostHaloEigenVectorReduced1X'] = eg_cat_eg1_x
-    hgroup['hostHaloEigenVectorReduced1Y'] = eg_cat_eg1_y
-    hgroup['hostHaloEigenVectorReduced1Z'] = eg_cat_eg1_z
-    hgroup['hostHaloEigenVectorReduced2X'] = eg_cat_eg2_x
-    hgroup['hostHaloEigenVectorReduced2Y'] = eg_cat_eg2_y
-    hgroup['hostHaloEigenVectorReduced2Z'] = eg_cat_eg2_z
-    hgroup['hostHaloEigenVectorReduced3X'] = eg_cat_eg3_x
-    hgroup['hostHaloEigenVectorReduced3Y'] = eg_cat_eg3_y
-    hgroup['hostHaloEigenVectorReduced3Z'] = eg_cat_eg3_z
+        hgroup['hostHaloEigenValueReduced1'] = eg_cat_eg1
+        hgroup['hostHaloEigenValueReduced2'] = eg_cat_eg2
+        hgroup['hostHaloEigenValueReduced3'] = eg_cat_eg3
+        hgroup['hostHaloEigenVectorReduced1X'] = eg_cat_eg1_x
+        hgroup['hostHaloEigenVectorReduced1Y'] = eg_cat_eg1_y
+        hgroup['hostHaloEigenVectorReduced1Z'] = eg_cat_eg1_z
+        hgroup['hostHaloEigenVectorReduced2X'] = eg_cat_eg2_x
+        hgroup['hostHaloEigenVectorReduced2Y'] = eg_cat_eg2_y
+        hgroup['hostHaloEigenVectorReduced2Z'] = eg_cat_eg2_z
+        hgroup['hostHaloEigenVectorReduced3X'] = eg_cat_eg3_x
+        hgroup['hostHaloEigenVectorReduced3Y'] = eg_cat_eg3_y
+        hgroup['hostHaloEigenVectorReduced3Z'] = eg_cat_eg3_z
     return
 
    
