@@ -9,8 +9,8 @@ import dtk
 import h5py
 import time
 import sys
-from mpi4py import MPI
-from multiprocessing import Process
+#from mpi4py import MPI
+#from multiprocessing import Process
 from scipy.interpolate import interp1d 
 
 
@@ -337,7 +337,7 @@ if __name__ == "__main__2":
 
 
     
-if __name__ == "__main__":
+if __name__ == "__main__mpi":
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     nproc = comm.Get_size()
@@ -362,4 +362,26 @@ if __name__ == "__main__":
                         output_ptrn.replace("${step}", str(step1)), 
                         output_index_only = output_index_only,
                         verbose=True)
+
+if __name__ == "__main__":
+    param = dtk.Param(sys.argv[1])
+    gltcs_snapshots_ptrn = param.get_string("gltcs_snapshots_ptrn")
+    steps  = param.get_int_list("steps")
+    mtree_ptrn = param.get_string("mtree_ptrn")
+    mtree_num  = param.get_int("mtree_num")
+    output_index_only = param.get_bool("output_index_only")
+    output_ptrn = param.get_string("output_ptrn")
+    verbose = True
+    mto = MTreeObj()
+    # mto.load_mtrees(mtree_ptrn,mtree_num,verbose=verbose)
+    # mto.save("tmp/mto.hdf5",verbose=verbose)
+    mto.load("tmp/mto.hdf5",verbose=verbose)
+    for i in range(0,len(steps)-1):
+        step2 = steps[i] #steps are in revervse chronological order
+        step1 = steps[i+1]
+        print("Working on {} -> {}".format(step1,step2))
+        match_index(gltcs_snapshots_ptrn, step1, step2, mto,
+                    output_ptrn.replace("${step}", str(step1)), 
+                    output_index_only = output_index_only,
+                    verbose=True)
 
