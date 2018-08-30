@@ -505,6 +505,7 @@ def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, 
     # return orignal_index[slct_valid][index]
     return index
         
+
 def get_keys(hgroup):
     keys = []
     def _collect_keys(name, obj):
@@ -647,7 +648,7 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         else:
             exit()
     #print("\t\toutput size: {:.2e}".format(val_out.size))
-    print("\t\tread + format time: {}".format(time.time()-t1))
+    print("\t\tsize: {:.1e}/{:.1e}:?{:.1e} read + format time: {}".format(np.sum(mask_tot), mask_tot.size, val_out.size, time.time()-t1))
     return val_out
 
 
@@ -1946,7 +1947,6 @@ def lightcone_resample(param_file_name):
                                                 healpix_pixels = healpix_pixels,
                                                 red_sequence_transition_mass_start = red_sequence_transition_mass_start,
                                                 red_sequence_transition_mass_end = red_sequence_transition_mass_end)
-
         #There is no other option. I just don't want to re-indent this entire block of code--
         #emacs doesn't re-indent python code well
         if(use_slope): 
