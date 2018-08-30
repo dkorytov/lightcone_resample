@@ -303,6 +303,9 @@ def construct_lc_data_healpix(fname, match_obs_color_red_seq = False,
             lc_data_hp['healpix_pixel'] = np.ones(lc_data_hp['m_star'].size, dtype='i4')*healpix_pixel
             lc_data_hps.append(lc_data_hp)
         lc_data = cat_dics(lc_data_hps)
+    for key in lc_data.keys():
+        num = np.sum(~np.isfinite(lc_data[key]))
+        assert num == 0
     return lc_data
 
 
