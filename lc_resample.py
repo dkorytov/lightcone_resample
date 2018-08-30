@@ -482,7 +482,14 @@ def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, 
     if verbose:
         t2 = time.time()
         print("\tdone formatting data. {}".format(t2-t1))
-    ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = False)
+    if lc_data['m_star'].size > 3e6: 
+        if verbose:
+            print("long tree")
+        ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = True)
+    else:
+        if verbose:
+            print("quick tree")
+        ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = False)
     if verbose:
         t3 = time.time()
         print("\tdone making kdtree. {}".format(t3-t2))
