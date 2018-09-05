@@ -49,6 +49,23 @@ class MTreeObj:
         if verbose:
             print("\t\tDone. {:.2f}".format(time.time()-t2))
 
+    def load_mtree_list(self, mtree_fname_list, verbose=False):
+        if verbose:
+            t1 = time.time()
+            print("\tLoading all files...")
+        for i, fname in enumerate(mtree_fname_list):
+            print("\t{}/{}".format(i,len(mtree_fname_list)))
+            self.load_mtree(fname,verbose=verbose)
+        if verbose:
+            t2 = time.time()
+            print("\t\tDone. {:.2f}".format(t2-t1))
+            print("\tSorting....")
+        self.nodeIndex = np.concatenate(self.nodeIndex_list)
+        self.descnIndex = np.concatenate(self.descnIndex_list)
+        self.srt = np.argsort(self.nodeIndex)
+        if verbose:
+            print("\t\tDone. {:.2f}".format(time.time()-t2))
+
 
     def get_descn(self,nodeIndex,verbose=False):
         if verbose:
@@ -107,6 +124,13 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file, output_i
     hfile2 = h5py.File(gltcs_snapshot_ptrn.replace("${step}",str(step2)),'r')
     nodeIndex1 = hfile1['galaxyProperties/infallIndex'].value
     nodeIndex2 = hfile2['galaxyProperties/infallIndex'].value
+    # print(np.unique(nodeIndex1).size, nodeIndex1.size)
+    # print(np.unique(nodeIndex2).size, nodeIndex2.size)
+    # print(nodeIndex1)
+    # print(nodeIndex2)
+    # for i in range(0,25):
+    #     find = nodeIndex2 == nodeIndex1[i]
+    #     print(nodeIndex1[i], np.sum(find), np.where(find))
     if verbose:
         t2 = time.time()
         print("\t done {:.2f}".format(t2-t1))
@@ -119,7 +143,7 @@ def match_index(gltcs_snapshot_ptrn, step1, step2, mtrees, output_file, output_i
         t4 = time.time()
         print("\t done getting satellte indexes {:.2f}".format(t4-t3))
         slct = match_2to1 != -1
-        #print(np.sum(nodeIndex1[slct]==nodeIndex2[match_2to1[slct]]), np.sum(slct))
+        print(np.sum(nodeIndex1[slct]==nodeIndex2[match_2to1[slct]]), np.sum(slct))
     descnIndex  = mtrees.get_descn(nodeIndex1,verbose)
     central_2to1 = dtk.search_sorted(nodeIndex2,descnIndex,sorter=srt)
     slct_cnt = match_2to1 == -1
@@ -373,7 +397,11 @@ if __name__ == "__main__":
     output_ptrn = param.get_string("output_ptrn")
     verbose = True
     mto = MTreeObj()
-    # mto.load_mtrees(mtree_ptrn,mtree_num,verbose=verbose)
+    # if "mtree_list" in param:
+    #     mtree_list = param.get_string_list('mtree_list')
+    #     mto.load_mtree_list(mtree_list,verbose=verbose)
+    # else:
+    #     mto.load_mtrees(mtree_ptrn,mtree_num,verbose=verbose)
     # mto.save("tmp/mto.hdf5",verbose=verbose)
     mto.load("tmp/mto.hdf5",verbose=verbose)
     for i in range(0,len(steps)-1):
