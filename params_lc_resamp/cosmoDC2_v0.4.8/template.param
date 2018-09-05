@@ -7,8 +7,8 @@ halo_shape_red_fname NULL
 sod_fname            NULL
 healpix_shear_file /projects/DarkUniverse_esp/prlarsen/galaxy_shears/OR_Production/baseDC2_z_#z_range#_cutout_${healpix}.hdf5
 healpix_file true
-healpix_pixels 564 
-fake_lensing  true
+healpix_pixels #healpix_group#
+fake_lensing  false
 
 steps   #step_list#
 
@@ -19,13 +19,13 @@ load_mask true
 mask_loc /gpfs/mira-fs0/projects/DarkUniverse_esp/dkorytov/data/Galacticus/#z_type#/mask/v0.4.4_mask.hdf5
 index_loc /gpfs/mira-fs0/projects/DarkUniverse_esp/dkorytov/data/Galacticus/#z_type#/index/v0.4.4_index_${step}.hdf5
 use_slope true
-substeps  1
-use_substep_redshift true
+substeps  5
+use_substep_redshift false
 
 recolor false
 
-short     true
-supershort true
+short     false
+supershort false
 cut_small_galaxies false
 cut_small_galaxies_mass 8 
 

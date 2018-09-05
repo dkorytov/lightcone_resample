@@ -7,16 +7,16 @@ halo_shape_red_fname NULL
 sod_fname            NULL
 healpix_shear_file /projects/DarkUniverse_esp/prlarsen/galaxy_shears/OR_Production/baseDC2_z_0_1_cutout_${healpix}.hdf5
 healpix_file true
-healpix_pixels 564 565 566 597 598 628 629 630
-fake_lensing  true
+healpix_pixels 598 599 628 629 630 660 661
+fake_lensing  false
 
 steps   499 487 475 464 453 442 432 421 411 401 392 382 373 365 355 347 338 331 323 315 307 300 293 286 279 272 266 259 253 247
 
 
-output_fname  /gpfs/mira-fs0/projects/DarkUniverse_esp/dkorytov/data/cosmoDC2/cosmoDC2_v0.4.5/steps_v0.4.5/z_0_1.step_${step}.healpix_${healpix}.hdf5
+output_fname  /gpfs/mira-fs0/projects/DarkUniverse_esp/dkorytov/data/cosmoDC2/cosmoDC2_v0.4.8/steps_v0.4.8/z_0_1.step_${step}.healpix_${healpix}.hdf5
 
 load_mask true
-mask_loc /gpfs/mira-fs0/projects/DarkUniverse_esp/dkorytov/data/Galacticus/low_z/cosmo_v0.4.4/mask.hdf5
+mask_loc /gpfs/mira-fs0/projects/DarkUniverse_esp/dkorytov/data/Galacticus/low_z/mask/v0.4.4_mask.hdf5
 index_loc /gpfs/mira-fs0/projects/DarkUniverse_esp/dkorytov/data/Galacticus/low_z/index/v0.4.4_index_${step}.hdf5
 use_slope true
 substeps  5
@@ -49,6 +49,4 @@ plot_substep false
 
 version_major       0
 version_minor       4
-version_minor_minor 5
-
-resume_at_step 315
+version_minor_minor 8
