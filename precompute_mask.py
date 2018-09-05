@@ -23,7 +23,7 @@ if __name__ == "__main__":
     selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
     selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
     selection3 = galmatcher.read_selections(yamlfile='galmatcher/yaml/observed_colors_protoDC2.yaml')
-    selection4 = galmatcher.read_selections(yamlfile='galmatcher/yaml/Av.yaml')
+    selection4 = galmatcher.read_selections(yamlfile='galmatcher/yaml/Av_Rv.yaml')
     dtk.ensure_dir(mask_loc)
     print(mask_loc)
     hfile = h5py.File(mask_loc, 'a')
