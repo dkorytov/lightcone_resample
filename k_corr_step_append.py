@@ -9,7 +9,7 @@ import dtk
 import h5py
 import time
 import sys
-from mpi4py import MPI
+#from mpi4py import MPI
 from multiprocessing import Process
 from scipy.interpolate import interp1d 
 
@@ -224,12 +224,32 @@ if __name__ == "__main__2":
 
 
 
-    
+#Old MPI Way
+# if __name__ == "__main__":
+#     comm = MPI.COMM_WORLD
+#     rank = comm.Get_rank()
+#     nproc = comm.Get_size()
+#     print("rank: ",rank)
+#     param = dtk.Param(sys.argv[1])
+#     gltcs_snapshots_ptrn = param.get_string("gltcs_snapshots_ptrn")
+#     steps  = param.get_int_list("steps")
+#     mtree_ptrn = param.get_string("mtree_ptrn")
+#     mtree_num  = param.get_int("mtree_num")
+#     output_ptrn = param.get_string("output_ptrn")
+#     mto = MTreeObj()
+#     verbose = True
+#     mto.load("tmp/mto.hdf5",verbose=verbose)
+#     for i in range(0,len(steps)-1):
+#         print(i,nproc,rank)
+#         if(i%nproc == rank):
+#             step2 = steps[i] #steps are in revervse chronological order
+#             step1 = steps[i+1]
+#             print("rank: {}. Working on {} -> {}".format(rank,step1,step2))
+#             match_index(gltcs_snapshots_ptrn, step1, step2, mto,
+#                         output_ptrn.replace("${step}", str(step1)),
+#                         verbose=True)
+
 if __name__ == "__main__":
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    nproc = comm.Get_size()
-    print("rank: ",rank)
     param = dtk.Param(sys.argv[1])
     gltcs_snapshots_ptrn = param.get_string("gltcs_snapshots_ptrn")
     steps  = param.get_int_list("steps")
@@ -240,12 +260,11 @@ if __name__ == "__main__":
     verbose = True
     mto.load("tmp/mto.hdf5",verbose=verbose)
     for i in range(0,len(steps)-1):
-        print(i,nproc,rank)
-        if(i%nproc == rank):
-            step2 = steps[i] #steps are in revervse chronological order
-            step1 = steps[i+1]
-            print("rank: {}. Working on {} -> {}".format(rank,step1,step2))
-            match_index(gltcs_snapshots_ptrn, step1, step2, mto,
-                        output_ptrn.replace("${step}", str(step1)),
-                        verbose=True)
+        step2 = steps[i] #steps are in revervse chronological order
+        step1 = steps[i+1]
+        print("rank: {}. Working on {} -> {}".format("?",step1,step2))
+        match_index(gltcs_snapshots_ptrn, step1, step2, mto,
+                    output_ptrn.replace("${step}", str(step1)),
+                    verbose=True)
+
 
