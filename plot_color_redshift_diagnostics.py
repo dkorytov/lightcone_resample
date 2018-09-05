@@ -36,7 +36,7 @@ def plot_colors(fname,z_min,z_max,title,mass_cut):
     plt.tight_layout()
     
 band_filter_frame = '{filter_type}_filters/magnitude:{filter_type}_{band}:{frame}:dustAtlas';
-model_band_filter_frame= 'UMachineNative/restframe_extincted_sdss_abs_mag{band}'
+model_band_filter_frame= 'baseDC2/restframe_extincted_sdss_abs_mag{band}'
 
 def get_norm(vals):
     val_max = np.max(np.abs(np.percentile(vals,[0.05,0.95])))                
@@ -54,7 +54,7 @@ def plot_color_z(fname,healpix_pixels,title, filter_type, frame, mag1, mag2,
     # mag2_val = hgroup[mag_trans[mag2].replace('${filter_type}',filter_type)].value
     hfiles = get_hfiles(fname, healpix_pixels)
     redshift = get_val(hfiles,'redshift')
-    redshift = get_val(hfiles,'UMachineNative/target_halo_redshift')
+    #redshift = get_val(hfiles,'UMachineNative/target_halo_redshift')
     # mag1_val = get_val(hfiles, Mag_trans[mag1].replace('${filter_type}',filter_type))
     # mag2_val = get_val(hfiles, Mag_trans[mag2].replace('${filter_type}',filter_type))
     mag1_val = get_mag(hfiles, filter_type,frame,mag1)
@@ -93,13 +93,13 @@ def plot_color_z(fname,healpix_pixels,title, filter_type, frame, mag1, mag2,
             slct = slct & (mr < mr_cut)
             title = title+'  mr < {:.1f}'.format(mr_cut)
     if rs_cut:
-        a = get_val(hfiles,'UMachineNative/is_on_red_sequence_gr')
-        b = get_val(hfiles,'UMachineNative/is_on_red_sequence_ri')
+        a = get_val(hfiles,'baseDC2/is_on_red_sequence_gr')
+        b = get_val(hfiles,'baseDC2/is_on_red_sequence_ri')
         print(a)
         slct = slct & (a & b)
         title = title+', Red Seq.'
     if synthetic is not None:
-        lc_id = get_val(hfiles,'UMachineNative/lightcone_id')
+        lc_id = get_val(hfiles,'baseDC2/lightcone_id')
         slct = slct & ((lc_id < 0) == synthetic)
         title = title +'Synth.'
     if ms_cut is not None:
@@ -112,7 +112,10 @@ def plot_color_z(fname,healpix_pixels,title, filter_type, frame, mag1, mag2,
     plt.figure(figsize=(7,5))
     print(plot_type)
     if plot_type == 'hist':
-        h,xbins,ybins = np.histogram2d(redshift[slct],clr_mag[slct],bins=(256,256))
+        print(np.min(redshift[slct]), np.max(redshift[slct]))
+        print(np.nanmin(clr_mag[slct]), np.nanmax(clr_mag[slct]))
+        ybins = np.linspace(-1,2.5,256)
+        h,xbins,ybins = np.histogram2d(redshift[slct],clr_mag[slct],bins=(256,ybins))
         plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
         plt.colorbar()
     elif plot_type == 'scatter':
@@ -164,7 +167,7 @@ def plot_color_z(fname,healpix_pixels,title, filter_type, frame, mag1, mag2,
             plt.plot(redshift[slct],clr_mag[slct],'+',alpha=0.3)
     else:
         raise ValueError
-    plt.grid()
+    plt.grid(ls=':')
     plt.xlabel('redshift');plt.ylabel('{} {} {}-{}'.format(frame, filter_type, mag1,mag2))
     plt.title(title)
     plt.tight_layout()
@@ -597,19 +600,24 @@ if __name__ == "__main__":
     mass_cut = None
     central_cut = None
     rs_cut = None
-    plot_type = 'hist'
+    plot_type = 'scatter'
     Mr_cut = None
     mi_cut = 24
+    mr_cut = None
     # plot_ellipticity_z(fname,healpix_pixels, title, mass_cut = mass_cut, central_cut = central_cut,
     #                    rs_cut = rs_cut, Mr_cut = Mr_cut,mi_cut = mi_cut)
 
-    filter_type = 'SDSS'
+    filter_type = 'LSST'
     scatter_color = None
 
     frame = 'obs'
     mag1 = 'g'
     mag2 = 'r'
-    # plot_color_mass(fname,healpix_pixels, title,filter_type, frame, mag1, mag2, [0,1], mass_cut=mass_cut, central_cut=central_cut, rs_cut=rs_cut,plot_type='hist',Mr_cut=Mr_cut,scatter_color=scatter_color)
+    #plot_color_mass(fname,healpix_pixels, title,filter_type, frame, mag1, mag2, [0,1], mass_cut=mass_cut, central_cut=central_cut, rs_cut=rs_cut,plot_type='hist',Mr_cut=Mr_cut,scatter_color=scatter_color)
+    # plot_color_z(fname,healpix_pixels, title,filter_type, frame, mag1, mag2, mass_cut=mass_cut, central_cut=central_cut, rs_cut=rs_cut,plot_type='hist',Mr_cut=Mr_cut,scatter_color=scatter_color)
+    # frame = 'rest'
+    # plot_color_z(fname,healpix_pixels, title,filter_type, frame, mag1, mag2, mass_cut=mass_cut, central_cut=central_cut, rs_cut=rs_cut,plot_type='hist',Mr_cut=Mr_cut,scatter_color=scatter_color)
+    # filter_type = 'model'
     # plot_color_z(fname,healpix_pixels, title,filter_type, frame, mag1, mag2, mass_cut=mass_cut, central_cut=central_cut, rs_cut=rs_cut,plot_type='hist',Mr_cut=Mr_cut,scatter_color=scatter_color)
     # mag1 = 'r'
     # mag2 = 'i'
@@ -677,35 +685,33 @@ if __name__ == "__main__":
 
     #################################
     # Basic observed colors
-    mr_cut = None
-
-    frame = 'rest'
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'g', 'r', plot_type='hist', ms_cut = 1e9)
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', ms_cut = 1e9)
-
-    frame = 'rest'
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'g', 'r', plot_type='hist', ms_cut = 3e9)
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', ms_cut = 3e9)
+    # mr_cut = None
 
     # frame = 'rest'
-    # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut)
-    # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut)
-    # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'i', 'z', plot_type='hist', mr_cut = mr_cut)
+    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'g', 'r', plot_type='hist', ms_cut = 1e9)
+    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', ms_cut = 1e9)
+    rs_cut = True
+    mass_cut = 1e13
+    frame = 'rest'
+    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'g', 'r', plot_type='hist')
+    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist')
 
-    # frame = 'obs'
-    # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut)
-    # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut)
-    # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'i', 'z', plot_type='hist', mr_cut = mr_cut)
+    frame = 'rest'
+    plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+    plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
 
-    # plot_color_z(fname,healpix_pixels, title, 'SDSS', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut)
-    # plot_color_z(fname,healpix_pixels, title, 'SDSS', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut)
-    # plot_color_z(fname,healpix_pixels, title, 'SDSS', frame, 'i', 'z', plot_type='hist', mr_cut = mr_cut)
+    plot_color_z(fname, healpix_pixels, title, 'SDSS', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+    plot_color_z(fname, healpix_pixels, title, 'SDSS', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
 
+    frame = 'obs'
+    plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+    plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+    plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'i', 'z', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
 
-    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, synthetic=True)
-    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, synthetic=False)
-    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, ms_cut = 1e9)
-    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'i', 'z', plot_type='hist', mr_cut = mr_cut)
+    plot_color_z(fname,healpix_pixels, title, 'SDSS', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+    plot_color_z(fname,healpix_pixels, title, 'SDSS', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+    plot_color_z(fname,healpix_pixels, title, 'SDSS', frame, 'i', 'z', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+
 
     #################################                                 
 
