@@ -50,3 +50,5 @@ plot_substep false
 version_major       #v1#
 version_minor       #v2#
 version_minor_minor #v3#
+
+concatenate_only true
