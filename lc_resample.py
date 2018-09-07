@@ -1001,11 +1001,23 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     elif healpix:
         print("\thealpix shears")
         h_shear = h5py.File(healpix_shear_file, 'r')[str(step)]
-        h_out_gp['ra'] = h_shear['ra'].value[mask]
-        h_out_gp['dec'] = h_shear['dec'].value[mask]
-        s1 = h_shear['shear_1'].value[mask]
-        s2 = h_shear['shear_2'].value[mask]
-        k = h_shear['conv'].value[mask]
+        shear_id = h_shear['galaxy_id'].value
+        base_id = h_in['galaxy_id'].value[mask]
+        srt = np.argsort(shear_id)
+        shear_indx = dtk.search_sorted(shear_id, base_id, sorter=srt)
+        assert np.sum(shear_indx==-1) == 0, "a baseDC2 galaxy wasn't found in shear catalog?"
+        h_out_gp['ra'] = h_shear['ra_lensed'].value[shear_indx]
+        h_out_gp['dec'] = h_shear['dec_lensed'].value[shear_indx]
+        s1 = h_shear['shear_1'].value[shear_indx]
+        s2 = h_shear['shear_2'].value[shear_indx]
+        k = h_shear['conv'].value[shear_indx]
+ 
+
+        # h_out_gp['ra'] = h_shear['ra_lensed'].value[mask]
+        # h_out_gp['dec'] = h_shear['dec_lensed'].value[mask]
+        # s1 = h_shear['shear_1'].value[mask]
+        # s2 = h_shear['shear_2'].value[mask]
+        # k = h_shear['conv'].value[mask]
         u = 1.0/((1.0-k)**2 - s1**2 -s2**2)
         h_out_gp['shear1'] = s1
         h_out_gp['shear2'] = s2
