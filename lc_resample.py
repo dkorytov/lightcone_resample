@@ -162,6 +162,9 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, step1_a, st
     gal_prop['clr_ri'] = mag_r - mag_i
     gal_prop['dust_factor'] = np.ones(size, dtype='f4')*dust_factor
     gal_prop['index']  = np.arange(size, dtype='i8')
+    gal_prop['node_index'] = get_column_interpolation_dust_raw('infallIndex',
+        h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
+        target_a, dust_factor)
     if match_obs_color_red_seq:
         lum_g_obs_d = get_column_interpolation_dust_raw(
             'SDSS_filters/diskLuminositiesStellar:SDSS_g:observed:dustAtlas',
@@ -742,7 +745,9 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
                                         verbose = False, 
                                         short = False, supershort = False, 
                                         step = -1, dust_factors = 1.0,
-                                        luminosity_factors = None):
+                                        luminosity_factors = None,
+                                        library_index = None,
+                                        node_index = None):
     print("===================================")
     print("copy columns interpolation dust raw")
     # lc_a = 1.0/(1.0+lc_redshift)
@@ -751,7 +756,13 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
     dtk.ensure_dir(output_fname)
     h_out = h5py.File(output_fname,'w')
     h_out_gp = h_out.create_group('galaxyProperties')
-    h_out_gp['dustFactor'] = dust_factors
+    h_out_gp['matchUp/dustFactor'] = dust_factors
+    if luminosity_factors is not None:
+        h_out_gp['matchUp/luminosityFactor'] = luminosity_factors
+    if library_index is not None:
+        h_out_gp['matchUp/libraryIndex'] = library_index
+    if node_index is not None:
+        h_out_gp['matchUp/GalacticusNodeIndex'] = node_index
     h_in_gp1 = h5py.File(input_fname.replace("${step}",str(step1)),'r')['galaxyProperties']
     h_in_gp2 = h5py.File(input_fname.replace("${step}",str(step2)),'r')['galaxyProperties']
 
@@ -778,14 +789,16 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
 
 
 def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
-                                                 kdtree_index, step1, step2,
-                                                 step1_a, step2_a, mask1, mask2, 
-                                                 index_2to1, lc_a, 
-                                                 healpix_pixels, lc_healpix,
-                                                 verbose = False, 
-                                                 short = False, supershort = False, 
-                                                 step = -1, dust_factors = 1.0,
-                                                 luminosity_factors = None):
+                                                kdtree_index, step1, step2,
+                                                step1_a, step2_a, mask1, mask2, 
+                                                index_2to1, lc_a, 
+                                                healpix_pixels, lc_healpix,
+                                                verbose = False, 
+                                                short = False, supershort = False, 
+                                                step = -1, dust_factors = 1.0,
+                                                luminosity_factors = None,
+                                                library_index = None,
+                                                node_index = None):
     print("===================================")
     print("copy columns interpolation dust raw")
     # lc_a = 1.0/(1.0+lc_redshift)
@@ -801,7 +814,10 @@ def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
         h_out = h5py.File(hp_fname,'w')
         h_out_gps[healpix_pixel] = h_out.create_group('galaxyProperties')
         slct = lc_healpix == healpix_pixel
-        h_out_gps[healpix_pixel]['dustFactor'] = dust_factors[slct]
+        h_out_gps[healpix_pixel]['matchUp/dustFactor'] = dust_factors[slct]
+        h_out_gps[healpix_pixel]['matchUp/luminosityFactor'] = luminosity_factors[slct]
+        h_out_gps[healpix_pixel]['matchUp/libraryIndex'] = library_index[slct]
+        h_out_gps[healpix_pixel]['matchUp/GalacticusNodeIndex'] = node_index[slct]
         h_out_gps_slct[healpix_pixel] = slct
     h_in_gp1 = h5py.File(input_fname.replace("${step}",str(step1)),'r')['galaxyProperties']
     h_in_gp2 = h5py.File(input_fname.replace("${step}",str(step2)),'r')['galaxyProperties']
@@ -1925,7 +1941,7 @@ def lightcone_resample(param_file_name):
         selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
         selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
     # This object converts simulation steps into redshift or scale factor
-    stepz = dtk.StepZ(200,0,500)
+    stepz = dtk.StepZ(sim_name='AlphaQ')
     output_step_list = [] # A running list of the output genereated for each time step. 
     # After all the steps run, the files are concatenated into one file. 
     step_size = steps.size
@@ -1971,7 +1987,7 @@ def lightcone_resample(param_file_name):
             mask_b = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection2)
             mask2 = mask_a & mask_b
         #The index remap galaxies in step2 to the same order as they were in step1
-        index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1']
+        index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1'].value
         verbose = True
         # Healpix cutouts/files have the step saved inside of them.
         if healpix_file:
@@ -2003,18 +2019,33 @@ def lightcone_resample(param_file_name):
             del_lc_a =  np.max(lc_a) - np.min(lc_a)
             step_a = np.min(lc_a)-0.01*del_lc_a #so no galaxy is exactly on the egdge of the bins
             step2_a = np.max(lc_a)+0.01*del_lc_a
-            print("min a: {} max a {}".format(step_a,step2_a))
-            print("raw min a: {} raw max a: {}".format(np.min(lc_a),np.max(lc_a)))
+            print('=======')
+            print("lc min a:       {}".format(step_a))
+            print("lc raw min a:   {}".format(np.min(lc_a)))
+            print("dtk step min a: {}".format(stepz.get_a(step)))
+            print("gltcs        a: {}".format(1.0/(2.0180+1.0)) )  
+            print('=======')
+            print("lc max a        {}".format(step2_a))
+            print("lc raw max a:   {}".format(np.max(lc_a)))
+            print("dtk step max a: {}".format(stepz.get_a(step2)))
+            print("gltcs        a: {}".format(1.0/(1.9472+1.0)))
+            print("===================")
+
             abins = np.linspace(step_a, step2_a,substeps+1)
             abins_avg = dtk.bins_avg(abins)
             index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
-            match_dust_factors = -1*np.ones(lc_data['redshift'].size,dtype='i4')
+            match_dust_factors = -np.ones(lc_data['redshift'].size,dtype='f4')
             match_luminosity_factors = -1*np.ones(lc_data['redshift'].size,dtype='f4')
+            match_library_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
+            match_node_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
+            print("abins_avg: ", abins_avg)
             for k in range(0,abins_avg.size):
                 print("\t{}/{} substeps".format(k,abins_avg.size))
                 slct_lc_abins1 = (abins[k]<=lc_a) 
                 slct_lc_abins2 = (lc_a<abins[k+1])
                 print("\t\t {} -> {}".format(abins[k],abins[k+1]))
+                print("\t\t center a: {}".format(abins_avg[k]))
+                print("\t\t step a: {} -> {}".format(step_a, step2_a))
                 slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
                 print("\t\t num gals: {}".format(np.sum(slct_lc_abin)))
                 lc_data_a = dic_select(lc_data, slct_lc_abin)
@@ -2070,6 +2101,8 @@ def lightcone_resample(param_file_name):
                     # Record the dust factor for the matched galaxy so that it can be applied 
                     # to other columns in copy_columns()
                     match_dust_factors[slct_lc_abin] = gal_prop_a['dust_factor'][index_abin]
+                    match_library_index[slct_lc_abin] = gal_prop_a['index'][index_abin]
+                    match_node_index[slct_lc_abin] = gal_prop_a['node_index'][index_abin]
                     if use_substep_redshift:
                         lc_a_cc[slct_lc_abin] = abins_avg[k]
                 # By default use the same Galacticus luminosity
@@ -2106,7 +2139,9 @@ def lightcone_resample(param_file_name):
                                                 index_2to1, lc_a_cc, verbose = verbose,
                                                 short = short, supershort = supershort,
                                                 dust_factors = match_dust_factors, step = step,
-                                                luminosity_factors = match_luminosity_factors)
+                                                luminosity_factors = match_luminosity_factors,
+                                                library_index = match_library_index,
+                                                node_index = match_node_index)
             overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
                               internal_step = internal_file_step, fake_lensing=fake_lensing, step = step,
@@ -2125,7 +2160,10 @@ def lightcone_resample(param_file_name):
                                                         verbose = verbose,
                                                         short = short, supershort = supershort,
                                                         dust_factors = match_dust_factors, step = step,
-                                                        luminosity_factors = match_luminosity_factors)
+                                                        luminosity_factors = match_luminosity_factors,
+                                                        library_index = match_library_index,
+                                                        node_index = match_node_index)
+
             for healpix_pixel in healpix_pixels:
                 output_healpix_loc = output_step_loc.replace("${healpix}",str(healpix_pixel))
                 lightcone_healpix_fname =lightcone_step_fname.replace("${healpix}", str(healpix_pixel))
