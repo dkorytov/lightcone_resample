@@ -1373,7 +1373,8 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
     #     hfile_out['galaxyProperties'][key].attrs['units'] = hfile_gf['galaxyProperties'][key].attrs['units']
     # #copy over metadata
     # del hfile_out['/metaData']
-    print(hfile_gf['metaData'].keys())
+    if 'metaData' in hfile_out:
+        del hfile_out['/metaData']
     hfile_out.copy(hfile_gf['metaData/GalacticusParameters'],'/metaData/GalacticusParameters/')
     #hfile_out.copy(hfile_gf['metaData/simulationParameters'],'/metaData/simulationParameters')
     # del hfile_out['/metaData/catalogCreationDate']
@@ -1948,6 +1949,10 @@ def lightcone_resample(param_file_name):
     else:
         red_sequence_transition_mass_start = 13.5
         red_sequence_transition_mass_end = 13.5
+    if "metadata_only" in param:
+        metadata_only = param.get_bool('metadata_only')
+    else:
+        metadata_only = False
 
     red_sequence_transition_mass_start = red_sequence_transition_mass_start,
     red_sequence_transition_mass_end = red_sequence_transition_mass_end
@@ -1989,13 +1994,14 @@ def lightcone_resample(param_file_name):
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
-        if concatenate_only: 
+        if concatenate_only or metadata_only: 
             print("Skipping: concatenate_only is true ")
             continue
 
         if resume_run and step > resume_at_step :
             print("Skipping: we haven't reach the resume step: step {} > resume {}".format(step,resume_at_step))
             continue
+
         elif resume_run:
             print("resuming: step {} > resume {}".format(step,resume_at_step))
         else:
@@ -2249,7 +2255,8 @@ def lightcone_resample(param_file_name):
 
     if not(healpix_file):
         output_all = output_fname.replace("${step}","all")
-        combine_step_lc_into_one(output_step_list, output_all)
+        if not metadata_only:
+            combine_step_lc_into_one(output_step_list, output_all)
         add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor, param_file = param_file_name)
     else:
         for healpix_pixel in healpix_pixels:
@@ -2261,7 +2268,8 @@ def lightcone_resample(param_file_name):
                 if i == 0:
                     continue
                 output_step_list.append(output_healpix_loc.replace("${step}", str(step)))
-            combine_step_lc_into_one(output_step_list, output_all, healpix=True)
+            if not metadata_only:
+                combine_step_lc_into_one(output_step_list, output_all, healpix=True)
             add_metadata(gltcs_metadata_ref, output_all, version_major, version_minor, version_minor_minor, healpix_ref = healpix_ref,
                          param_file = param_file_name)
         
