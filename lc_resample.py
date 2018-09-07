@@ -86,7 +86,7 @@ def clean_up_gal_prop(gal_prop):
     return gal_prop
 
 
-def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, mask1, mask2, 
+def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, step1_a, step2_a, target_a, mask1, mask2, 
                                          dust_factor = 1.0, 
                                          match_obs_color_red_seq = False, 
                                          cut_small_galaxies_mass = None):
@@ -95,10 +95,20 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
     """
     h_in_gp1 = h5py.File(fname.replace("${step}", str(step1)), 'r')['galaxyProperties']
     h_in_gp2 = h5py.File(fname.replace("${step}", str(step2)), 'r')['galaxyProperties']
-    stepz = dtk.StepZ(sim_name="AlphaQ")
-    step1_a = stepz.get_a(step1)
-    step2_a = stepz.get_a(step2)
-    
+    ##======DEBUG========
+    # stepz = dtk.StepZ(sim_name="AlphaQ")
+    # step1_ab = stepz.get_a(step1)
+    # step2_ab = stepz.get_a(step2)
+    # print("\t\t step1/2: {} - {}".format(step1, step2))
+    # print("\t\t step1/2_a: {:.4f} -> {:.4f}".format(step1_a, step2_a))
+    # print("\t\t step1/2_ab: {:.4f} -> {:.4f}".format(step1_ab, step2_ab))
+    # print("\t\t step1/2_z: {:.4f} -> {:.4f}".format(1.0/step1_a-1.0, 1.0/step2_a-1.0))
+    # print("\t\t step1/2_z2:{:.4f} -> {:.4f}".format(stepz.get_z(step1), stepz.get_z(step2)))
+    # print("\t\t target a: {:.4f}".format(target_a))
+    # print("\t\t target z: {:.3f}".format(1.0/target_a -1.0))
+    # step1_a = stepz.get_a(step1)
+    # step2_a = stepz.get_a(step2)
+    ##=========DEBUG========
     lum_g_d = get_column_interpolation_dust_raw(
         'SDSS_filters/diskLuminositiesStellar:SDSS_g:rest:dustAtlas',
         h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
@@ -126,7 +136,17 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, target_a, m
     lum_g = lum_g_d + lum_g_b
     lum_i = lum_i_d + lum_i_b
     lum_r = lum_r_d + lum_r_b
-
+    ##=======DEBUG======
+    # print("=============")
+    # print("lum_r non-finite: ", np.sum(~np.isfinite(lum_r)), np.sum(lum_r<0), lum_r.size)
+    # print("lum_r_d non-finite: ", np.sum(~np.isfinite(lum_r_d)), np.sum(lum_r_d<0), lum_r_d.size)
+    # print("lum_r_b non-finite: ", np.sum(~np.isfinite(lum_r_b)), np.sum(lum_r_b<0), lum_r_b.size)
+    # slct_neg = lum_r<0
+    # print(lum_r[slct_neg])
+    # print(lum_r_d[slct_neg])
+    # print(lum_r_b[slct_neg])
+    # print("=============")
+    ##=======DEBUG======
     m_star = get_column_interpolation_dust_raw(
         'totalMassStellar',
         h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a,
@@ -578,6 +598,10 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
     t1 = time.time()
     step_del_a = step2_a - step1_a
     target_del_a = target_a - step1_a
+    ##=========DEBUG==========
+    # print("step del_a {:.3f} - {:.3f}  = {:.3f}".format(step2_a, step1_a, step_del_a))
+    # print("target_del_a {:.3f} - {:.3f} = {:.3f}".format(target_a, step1_a, target_del_a))
+    ##=========DEBUG==========
     # The masking all galaxies that fail galmatcher's requirements at
     # step1, galaxies that don't have a descndent, or if the
     # descendent galaxy at step2 doesn't pass galmatcher requirements.
@@ -595,31 +619,50 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
         val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
         val1_dust = h_in_gp1[key].value[mask_tot]
         val2_no_dust = h_in_gp2[key].value[index][mask_tot]
+        # val1_no_dust_lg = np.log(val1_no_dust)
+        # val1_dust_lg = np.log(val1_dust)
+        # val2_no_dust_lg = np.log(val2_no_dust)
         dust_effect = val1_dust/val1_no_dust
         dust_effect[val1_no_dust == 0] = 1
         slope = (val2_no_dust - val1_no_dust)/step_del_a
         slope[step_del_a ==0] =0
-
+        # slope_mag = (val2_no_dust_lg  - val1_no_dust_lg)/step_del_a
+        # slope_mag[step_del_a == 0] = 0
+        ##=======DEBUG=======
+        # def print_vals(label, data):
+        #     print("\t\t{} below/zero/size: {}/{}/{}".format(label, np.sum(data<0), np.sum(data==0), data.size))
+        # print_vals("val1_no_dust", val1_no_dust)
+        # print_vals("val2_no_dust", val2_no_dust)
+        # print_vals("val1_dust", val1_dust)
+        ##=======DEBUG=======
         if kdtree_index is None:
             tot_dust_effect = dust_effect**dust_factors
             slct = dust_effect > 1.0
             tot_dust_effect[slct] = dust_effect[slct]
             val_out = (val1_no_dust + slope*target_del_a)*tot_dust_effect
+            #val_out = np.exp((val1_no_dust_lg + slope_mag*target_del_a)*tot_dust_effect)
         else:
             tot_dust_effect = (dust_effect[kdtree_index]**dust_factors)
             slct = dust_effect[kdtree_index] > 1.0
             tot_dust_effect[slct] = dust_effect[kdtree_index][slct]
             val_out = (val1_no_dust[kdtree_index] + slope[kdtree_index]*target_del_a)*tot_dust_effect
+            #val_out = np.exp((val1_no_dust_lg[kdtree_index] + slope_mag[kdtree_index]*target_del_a)*tot_dust_effect)
     else:
         #print('\t\tinerpolation without dust')
         val1_data = h_in_gp1[key].value[mask_tot]
         val2_data = h_in_gp2[key].value[index][mask_tot]
+        # val1_data_lg = np.log(val1_data)
+        # val2_data_lg = np.log(val2_data)
         slope = (val2_data - val1_data)/step_del_a
         slope[step_del_a==0]=0
+        # slope_mag = (val1_data_lg-val2_data_lg)/step_del_a
+        # slope_mag[step_del_a==0]=0
         if kdtree_index is None:
             val_out = val1_data + slope*target_del_a
+            #val_out = np.log(val1_data_lg + slope_mag*target_del_a)
         else:
             val_out = val1_data[kdtree_index] + slope[kdtree_index]*target_del_a
+            #val_out = np.log(val1_data_lg[kdtree_index] + slope_mag[kdtree_index]*target_del_a)
     #print('\t\t',val_out.dtype)
     if not(luminosity_factors is None):
         if(any(l in key for l in luminosity_factors_keys)):
@@ -640,15 +683,19 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
             slct = ~np.isfinite(dust_effect)
             print(val1_no_dust[slct])
             print(val1_dust[slct])
-        print(np.sum(~np.isfinite(slope)))
+        print(np.sum(~np.isfinite(slope_mag)))
         print(np.sum(~np.isfinite(target_del_a)))
         if "emissionLines" in key:
             print("overwriting non-finite values with 0")
             val_out[~np.isfinite(val_out)]=0.0
         else:
-            exit()
+            raise
     #print("\t\toutput size: {:.2e}".format(val_out.size))
-    print("\t\tsize: {:.1e}/{:.1e}:?{:.1e} read + format time: {}".format(np.sum(mask_tot), mask_tot.size, val_out.size, time.time()-t1))
+    print("\t\t mask size:{:.1e}/{:.1e} data size:{:.1e} read + format time: {}".format(np.sum(mask_tot), mask_tot.size, val_out.size, time.time()-t1))
+    ##=======DEBUG======
+    # print("\t\t non-finite: {}/{}/{}".format(np.sum(~np.isfinite(val_out)), np.sum(val_out<0), val_out.size))
+    # print("\t\t below/zero/size: {}/{}/{}".format(np.sum(val_out<0), np.sum(val_out==0), val_out.size))
+    ##=======DEBUG======
     return val_out
 
 
@@ -1984,11 +2031,9 @@ def lightcone_resample(param_file_name):
                         #                                                          mask = mask1,
                         #                                                          dust_factor=dust_factor)
                         gal_prop_tmp2 = construct_gal_prop_redshift_dust_raw(
-                            gltcs_fname, index_2to1, step, step2, abins_avg[k],
+                            gltcs_fname, index_2to1, step, step2, step_a, step2_a, abins_avg[k],
                             mask1, mask2, dust_factor, match_obs_color_red_seq,
                             cut_small_galaxies_mass = cut_small_galaxies_mass)
-                        # plot_gal_prop_dist([gal_prop_tmp, gal_prop_tmp2], ["old method", "new method"])
-                        # plt.show()
                         gal_prop_list.append(gal_prop_tmp2)
                     gal_prop_a = cat_dics(gal_prop_list)
                 # Find the closest Galacticus galaxy
