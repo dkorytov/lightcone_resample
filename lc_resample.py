@@ -581,9 +581,9 @@ def soft_transition(vals, trans_start, trans_end):
 
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
                'redshiftHubble','placementType','isCentral','hostIndex', 
-               'blackHoleAccretionRate','blackHoleMass', 'step')
+               'blackHoleAccretionRate','blackHoleMass', 'step','infallHaloMass','infallHaloTag')
 #TODO re-allow nitrogen contamination
-copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total', 'ContinuumLuminosity', 'contam_nitrogenII6584')
+copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total', 'ContinuumLuminosity', 'contam_nitrogenII6584', 'Sersic', 'morphology', 'contam_nitrogen', 'Continuum')
 no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
@@ -1021,10 +1021,13 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['convergence'] = h_in['convergence'].value[mask]
 
     if healpix:
-        h_out_gp['galaxyID'] = h_in['galaxy_id'].value
-    central = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
+        h_out_gp['galaxyID'] = h_in['galaxy_id'].value[mask]
+    central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
+    central = h_in['upid'].value[mask] == -1
+    assert np.sum(central_2 != central) == 0, "double centrals?"
     h_out_gp['isCentral'] = central
-    h_out_gp['hostHaloTag'] = h_in['target_halo_id'].value[mask]
+    h_out_gp['hostHaloTag'] = h_in['target_halo_fof_halo_id'].value[mask]
+    h_out_gp['uniqueHaloID'] = h_in['target_halo_id'].value[mask]#h_in['halo_id'].value[mask]
     h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value[mask]
     unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
     h_out_gp['NumberSelected'] = cnt[indx]
@@ -1186,13 +1189,13 @@ def add_native_umachine(output_fname, umachine_native, cut_small_galaxies_mass =
     hgroup = h5py.File(output_fname, 'r+')['galaxyProperties']
     if cut_small_galaxies_mass is None:
         for key in h_in.keys():
-            hgroup['UMachineNative/'+key] = h_in[key].value
+            hgroup['baseDC2/'+key] = h_in[key].value
     else:
         sm = h_in['obs_sm'].value # in linear units
         slct = sm > 10**cut_small_galaxies_mass #convert cut_small.. from log to linear
         for key in h_in.keys():
-            hgroup['UMachineNative/'+key] = h_in[key].value[slct]
-    print("done addign umachine quantities. time: {:.2f}".format(time.time()-t1))
+            hgroup['baseDC2/'+key] = h_in[key].value[slct]
+    print("done addign baseDC2 quantities. time: {:.2f}".format(time.time()-t1))
     return
 
 
@@ -1419,7 +1422,7 @@ def add_units(out_fname):
     mag_list = ['magnitude']; mag_unit = 'AB magnitude'
     arcsec_list= ['Arcsec']; arcsec_unit = 'arcsecond'
     rad_list = []; rad_unit ='radians'
-    deg_list = ['ra','dec','positionAngle','inclination']; deg_unit = 'degrees'
+    deg_list = ['ra','dec','ra_true', 'dec_true', 'morphology/positionAngle','inclination']; deg_unit = 'degrees'
     phys_kpc_list = ['Radius']; phys_kpc_unit = 'physical kpc'
     phys_mpc_list = []; phys_mpc_unit = 'physical Mpc'
     reduced_dist_list =['Reduced','EigenVector', 'Eddington'];reduced_dist_unit = 'unitless'
@@ -1432,12 +1435,12 @@ def add_units(out_fname):
     abundance_list =['Abundance'];abundance_unit = 'Msun'
     luminosity_list =['Luminosities','Luminosity']; luminosity_unit = 'AB luminosity (4.4659e13 W/Hz)'
     unitless_list = ['redshift','shear','magnification','convergence','Ellipticity','Sersic','AxisRatio','dustFactor']; unitless_unit ='unitless'
-    id_list = ['Index','Tag','placementType','galaxyID','lightcone_replication','lightcone_rotation']; id_unit = 'id/index'
+    id_list = ['Index','Tag','placementType','galaxyID','lightcone_replication','lightcone_rotation', 'uniqueHaloID','isCentral']; id_unit = 'id/index'
     angular_list = ['angularMomentum'];angular_unit = 'Msun*km/s*Mpc'
     bool_list =['nodeIsIsolated'];bool_unit = 'boolean'
     spinSpin_list =['spinSpin'];spinSpin_unit ='lambda'
     step_list = ['step'];step_unit = 'simluation step'
-    umachine_list = ['UMachineNative'];umachine_unit = 'Unspecified'
+    umachine_list = ['UMachineNative', 'baseDC2', 'matchUp'];umachine_unit = 'Unspecified'
     count_list =['NumberSelected'];count_unit = 'count'
     print("assigning units")
     keys = get_keys(hfile)
@@ -1461,7 +1464,7 @@ def add_units(out_fname):
             hfile[key].attrs['units']=rad_unit
             print( "\t ",rad_unit)
             #add degree units
-        elif(any(l in key for l in deg_list)):
+        elif(any(l == key for l in deg_list)):
             hfile[key].attrs['units']=deg_unit
             print( '\t',deg_unit)
             #add kpc units
@@ -1536,7 +1539,8 @@ def add_units(out_fname):
             #Everything should have a unit!
         else:
             print("column", key, "was not assigned a unit :(")
-            raise;
+            print("===================")
+            #raise;
 
 
 def plot_differences(lc_data, gal_prop, index):
