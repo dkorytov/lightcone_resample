@@ -1285,9 +1285,10 @@ def add_ellipticity_quantities(output_fname, verbose = False):
     else:
         inclination = None
     mag_r = hgroup['SDSS_filters/magnitude:SDSS_r:rest:dustAtlas'].value
+    size = np.size(mag_r)
 
-    size = np.size(inclination)
     pos_angle = np.random.uniform(size=size)*np.pi
+    print("pos_angle: ", pos_angle.size)
     if False: # Old code for ellipticity
         spheroid_axis_ratio = dtk.clipped_gaussian(0.8, 0.2, size, max_val = 1.0, min_val=0.0)
         dist,lim = dtk.make_distribution(-inclination)
@@ -1328,6 +1329,14 @@ def add_ellipticity_quantities(output_fname, verbose = False):
     hgroup['morphology/totalEllipticity1'] = np.array(np.cos(2.0*pos_angle)*tot_ellip, dtype='f4')
     hgroup['morphology/totalEllipticity2'] = np.array(np.sin(2.0*pos_angle)*tot_ellip, dtype='f4')
     hgroup['morphology/positionAngle'] = np.array(pos_angle*180.0/np.pi, dtype='f4')
+    print("position angle writen: ", np.array(pos_angle*180.0/np.pi, dtype='f4'))
+    print("position angle writen: ", np.array(pos_angle*180.0/np.pi, dtype='f4').size)
+    srsc_indx_disk = 1.0*np.ones(lum_disk.size,dtype='f4')
+    srsc_indx_sphere = 4.0*np.ones(lum_disk.size,dtype='f4')
+    srsc_indx_tot = (srsc_indx_disk*lum_disk + srsc_indx_sphere*lum_sphere)/(lum_tot)
+    hgroup['morphology/diskSersicIndex'] = srsc_indx_disk
+    hgroup['morphology/spheroidSersicIndex'] = srsc_indx_sphere
+    hgroup['morphology/totalSersicIndex'] = srsc_indx_tot
     return
 
 
