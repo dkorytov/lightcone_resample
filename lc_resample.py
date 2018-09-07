@@ -416,8 +416,11 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
 
     # if the search size is large enough, it's saves total time to construct a 
     # faster to search tree. Otherwise build a quick tree. 
-
-    if m_star.size > 3e6: 
+    if m_star.size > 3e7:
+        if verbose:
+            print("long balanced tree")
+        ckdtree = cKDTree(gal_mat, balanced_tree = True, compact_nodes = True)
+    elif m_star.size > 3e6: 
         if verbose:
             print("long tree")
         ckdtree = cKDTree(gal_mat, balanced_tree = False, compact_nodes = True)
@@ -429,15 +432,34 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     if verbose:
         t3 = time.time()
         print('\tdone making tree. {}'.format(t3-t2))
-    dist, index = ckdtree.query(lc_mat, nnk, n_jobs=10)
+    dist_raw, index_raw = ckdtree.query(lc_mat, nnk, n_jobs=10)
     if verbose:
         t4= time.time()
         print('\tdone querying. {}'.format(t4-t3))
     if nnk > 1:
-        rand = np.random.randint(nnk,size=dist.shape[0])
-        aa = np.arange(dist.shape[0])
+        rand = np.random.randint(nnk,size=index_raw.shape[0])
+        aa = np.arange(index_raw.shape[0])
         #dist = dist[aa,rand]
-        index = index[aa,rand]
+        index = index_raw[aa,rand]
+    else:
+        index = index_raw
+    ##======DEBUG===========
+    # print("lc_data size:")
+    # for k in lc_data:
+    #     print(k,np.sum(~np.isfinite(lc_data[k])),'/',lc_data[k].size)
+    # print("\n\ngal_prop size:")
+    # for k in gal_prop:
+    #     print(k,np.sum(~np.isfinite(gal_prop[k])),'/',gal_prop[k].size)
+
+    # print("index min/max: ", np.min(index), np.max(index))
+    # print("ckdtree size: ",gal_mat[:,0].size, gal_mat[0,:].size)
+    # plt.figure()
+    # h,xbins = np.histogram(index, bins=1000)
+    # plt.plot(dtk.bins_avg(xbins), h)
+    # plt.grid()
+    # plt.xlabel('index num')
+    # plt.ylabel('count')
+    ##======DEBUG===========
     return index
    
 
