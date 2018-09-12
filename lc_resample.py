@@ -583,7 +583,7 @@ copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshi
                'redshiftHubble','placementType','isCentral','hostIndex', 
                'blackHoleAccretionRate','blackHoleMass', 'step','infallHaloMass','infallHaloTag')
 #TODO re-allow nitrogen contamination
-copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total', 'ContinuumLuminosity', 'contam_nitrogenII6584', 'Sersic', 'morphology', 'contam_nitrogen', 'Continuum')
+copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total', 'ContinuumLuminosity', 'contam_nitrogenII6584', 'Sersic', 'morphology', 'contam_nitrogen')
 no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
 no_slope_ptrn  =('morphology','hostHalo','infall')
 
