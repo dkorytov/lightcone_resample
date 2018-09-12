@@ -1416,6 +1416,7 @@ def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version
         hfile_hp = h5py.File(healpix_ref,'r')['metaData']
         hfile_out['metaData/H_0'] = hfile_hp['H_0'].value
         hfile_out['metaData/Omega_b'] = hfile_hp['Omega_b'].value
+        hfile_out['metaData/Omega_matter'] = hfile_hp['Omega_matter'].value
         hfile_out['metaData/skyArea'] = hfile_hp['skyArea'].value
         hfile_out['metaData/cosmoDC2_Model/commit_hash'] = hfile_hp['commit_hash'].value
         hfile_out['metaData/cosmoDC2_Model/seed'] = hfile_hp['seed'].value
