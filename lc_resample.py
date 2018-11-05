@@ -1102,6 +1102,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['uniqueHaloID'] = np.zeros(0, dtype=np.int64)
         h_out_gp['hostHaloMass'] = np.zeros(0, dtype=np.float)
         h_out_gp['matchUp/NumberSelected'] = np.zeros(0,dtype=np.int)
+    # TODO: Reinsert central check
     # assert np.sum(central_2 != central) == 0, "double centrals?"
     tf = time.time()
     if verbose:
