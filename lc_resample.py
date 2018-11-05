@@ -243,12 +243,21 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         hfile = h5py.File(fname,'r')
     else:
         hfile = h5py.File(fname,'r')[str(internal_step)]
-    lc_data['m_star'] = np.log10(hfile['obs_sm'].value)
-    lc_data['Mag_r'] = hfile['restframe_extincted_sdss_abs_magr'].value
-    lc_data['clr_gr'] = hfile['restframe_extincted_sdss_gr'].value
-    lc_data['clr_ri'] = hfile['restframe_extincted_sdss_ri'].value
-    lc_data['redshift'] = hfile['redshift'].value
-    lc_data['sfr_percentile'] = hfile['sfr_percentile'].value
+    non_empty_step = "obs_sm" in hfile
+    if non_empty_step:
+        lc_data['m_star'] = np.log10(hfile['obs_sm'].value)
+        lc_data['Mag_r'] = hfile['restframe_extincted_sdss_abs_magr'].value
+        lc_data['clr_gr'] = hfile['restframe_extincted_sdss_gr'].value
+        lc_data['clr_ri'] = hfile['restframe_extincted_sdss_ri'].value
+        lc_data['redshift'] = hfile['redshift'].value
+        lc_data['sfr_percentile'] = hfile['sfr_percentile'].value
+    else:
+        lc_data['m_star'] = np.zeros(0, dtype=np.float)
+        lc_data['Mag_r'] = np.zeros(0, dtype=np.float)
+        lc_data['clr_gr'] = np.zeros(0, dtype=np.float)
+        lc_data['clr_ri'] = np.zeros(0, dtype=np.float)
+        lc_data['redshift'] = np.zeros(0, dtype=np.float)
+        lc_data['sfr_percentile'] = np.zeros(0, dtype=np.float)
     if recolor:
         print(hfile.keys())
         upid_mock = hfile['upid'].value
@@ -277,7 +286,7 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         lc_data['clr_gr'] = b
         lc_data['clr_ri'] = c
         #lc_data['Mag_r'], lc_data['clr_gr'], lc_data['clr_ri'] = [a,b,c]
-    if match_obs_color_red_seq:
+    if match_obs_color_red_seq and non_empty_step:
         print("match obs color red seq")
         host_halo_mvir_mock = hfile['host_halo_mvir'].value    
         is_on_red_seq_gr = hfile['is_on_red_sequence_gr'].value
@@ -288,6 +297,11 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         lc_data['clr_gr_obs'] = mean_des_red_sequence_gr_color_vs_redshift(lc_data['redshift'])
         lc_data['clr_ri_obs'] = mean_des_red_sequence_ri_color_vs_redshift(lc_data['redshift'])
         lc_data['clr_iz_obs'] = mean_des_red_sequence_iz_color_vs_redshift(lc_data['redshift'])
+    elif match_obs_color_red_seq:
+        lc_data['is_cluster_red_sequence'] = np.zeros(0,dtype=bool)
+        lc_data['clr_gr_obs'] = np.zeros(0,dtype=bool)
+        lc_data['clr_ri_obs'] = np.zeros(0,dtype=bool)
+        lc_data['clr_iz_obs'] = np.zeros(0,dtype=bool)
     if not (cut_small_galaxies_mass is None):
         print("cutting out small galaxies!")
         # Cutting out low mass galaxies so it runs fasters
@@ -884,9 +898,12 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_in = h5py.File(input_fname,'r')
     else:
         h_in = h5py.File(input_fname,'r')[str(internal_step)]
-        
-    print(h_in.keys())
-    sm = h_in['obs_sm'].value
+    # if the input file has no galaxies, it doesn't have any columns
+    non_empty_step = "obs_sm" in h_in
+    if non_empty_step:
+        sm = h_in['obs_sm'].value
+    else:
+        sm = np.zeros(0, dtype=float)
     if cut_small_galaxies_mass is None:
         mask = np.ones(sm.size, dtype=bool)
     else: 
@@ -896,15 +913,28 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     if verbose:
         print("\t done reading in data", t2-t1)
     #xyz,v(xyz)
-    
-    x = h_in['x'].value[mask]
-    y = h_in['y'].value[mask]
-    z = h_in['z'].value[mask]
-    vx = h_in['vx'].value[mask]
-    vy = h_in['vy'].value[mask]
-    vz = h_in['vz'].value[mask]
-    size = h_in['ra'].size
-    redshift  =h_in['redshift'].value[mask]
+    if non_empty_step:
+        x = h_in['x'].value[mask]
+        y = h_in['y'].value[mask]
+        z = h_in['z'].value[mask]
+        vx = h_in['vx'].value[mask]
+        vy = h_in['vy'].value[mask]
+        vz = h_in['vz'].value[mask]
+        size = h_in['ra'].size
+        redshift  =h_in['redshift'].value[mask]
+        h_out_gp['lightcone_rotation'] = h_in['lightcone_rotation'].value[mask]
+        h_out_gp['lightcone_replication'] = h_in['lightcone_replication'].value[mask]
+    else:
+        x = np.zeros(0, dtype=float)
+        y = np.zeros(0, dtype=float)
+        z = np.zeros(0, dtype=float)
+        vx = np.zeros(0, dtype=float)
+        vy = np.zeros(0, dtype=float)
+        vz = np.zeros(0, dtype=float)
+        size =  0
+        redshift  =np.zeros(0, dtype=float)
+        h_out_gp['lightcone_rotation'] = np.zeros(0, dtype=int)
+        h_out_gp['lightcone_replication'] = np.zeros(0, dtype=int)
     print('step: ', step)
     assert step is not None, "Step is not specified"
     h_out_gp['step']=np.ones(size,dtype='i4')*step
@@ -914,8 +944,6 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     h_out_gp['vx']=vx
     h_out_gp['vy']=vy
     h_out_gp['vz']=vz
-    h_out_gp['lightcone_rotation'] = h_in['lightcone_rotation'].value[mask]
-    h_out_gp['lightcone_replication'] = h_in['lightcone_replication'].value[mask]
     keys = get_keys(h_out_gp)
     for key in keys:
         if "spheroid" in key:
@@ -924,12 +952,17 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
             total_key = key.replace('spheroid','total')
             h_out_gp[total_key] = np.array(h_out_gp[disk_key].value + h_out_gp[spheroid_key].value, dtype='f4')
     if ignore_mstar:
-        print("Ignoring M* in stellar mass assignment!")
-        # m*_delta = M*_new/M*_old
-        mstar_delta = h_in['obs_sm'].value[mask]/h_out_gp['totalMassStellar'].value
-        h_out_gp['totalMassStellar'][:] = h_out_gp['totalMassStellar'].value*mstar_delta
-        h_out_gp['diskMassStellar'][:] = h_out_gp['diskMassStellar'].value*mstar_delta
-        h_out_gp['spheroidMassStellar'][:] = h_out_gp['spheroidMassStellar'].value*mstar_delta
+        if non_empty_step:
+            print("Ignoring M* in stellar mass assignment!")
+            # m*_delta = M*_new/M*_old
+            mstar_delta = h_in['obs_sm'].value[mask]/h_out_gp['totalMassStellar'].value
+            h_out_gp['totalMassStellar'][:] = h_out_gp['totalMassStellar'].value*mstar_delta
+            h_out_gp['diskMassStellar'][:] = h_out_gp['diskMassStellar'].value*mstar_delta
+            h_out_gp['spheroidMassStellar'][:] = h_out_gp['spheroidMassStellar'].value*mstar_delta
+        else:
+            # No need to modify data on disk if the data sets are empty
+            pass 
+
     t3 = time.time()
     if verbose:
         print("\t done overwriting xyz, v_(xyz)",t3-t2)
@@ -979,8 +1012,13 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     #redshift
     h_out_gp['redshift'] = z_obs
     h_out_gp['redshiftHubble'] = redshift
-    h_out_gp['ra_true'] = h_in['ra'].value[mask]
-    h_out_gp['dec_true'] = h_in['dec'].value[mask]
+    if non_empty_step:
+        h_out_gp['ra_true'] = h_in['ra'].value[mask]
+        h_out_gp['dec_true'] = h_in['dec'].value[mask]
+    else:
+        h_out_gp['ra_true'] = np.zeros(0, dtype=np.float)
+        h_out_gp['dec_true'] = np.zeros(0, dtype=np.float)
+
     print("step in no_shear_steps", (step in no_shear_steps))
     print(step, no_shear_steps)
     print(step in no_shear_steps)
@@ -991,9 +1029,15 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
 
     if fake_lensing:
         print("\tfake shears")
-        size = h_in['ra'].size
-        h_out_gp['ra'] = h_in['ra'].value[mask]
-        h_out_gp['dec'] = h_in['dec'].value[mask]
+
+        if non_empty_step:
+            size = h_in['ra'].size
+            h_out_gp['ra'] = h_in['ra'].value[mask]
+            h_out_gp['dec'] = h_in['dec'].value[mask]
+        else:
+            size = 0
+            h_out_gp['ra'] = np.zeros(0,dtype=float)
+            h_out_gp['dec'] =np.zeros(0,dtype=float)
         h_out_gp['shear1'] = np.zeros(size, dtype='f4')
         h_out_gp['shear2'] = np.zeros(size, dtype='f4')
         h_out_gp['magnification'] = np.ones(size, dtype='f4')
@@ -1002,29 +1046,35 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         print("\thealpix shears")
         h_shear = h5py.File(healpix_shear_file, 'r')[str(step)]
         shear_id = h_shear['galaxy_id'].value
-        base_id = h_in['galaxy_id'].value[mask]
-        srt = np.argsort(shear_id)
-        shear_indx = dtk.search_sorted(shear_id, base_id, sorter=srt)
-        assert np.sum(shear_indx==-1) == 0, "a baseDC2 galaxy wasn't found in shear catalog?"
-        h_out_gp['ra'] = h_shear['ra_lensed'].value[shear_indx]
-        h_out_gp['dec'] = h_shear['dec_lensed'].value[shear_indx]
-        s1 = h_shear['shear_1'].value[shear_indx]
-        s2 = h_shear['shear_2'].value[shear_indx]
-        k = h_shear['conv'].value[shear_indx]
- 
+        if non_empty_step:
+            base_id = h_in['galaxy_id'].value[mask]
+            srt = np.argsort(shear_id)
+            shear_indx = dtk.search_sorted(shear_id, base_id, sorter=srt)
+            assert np.sum(shear_indx==-1) == 0, "a baseDC2 galaxy wasn't found in shear catalog?"
+            h_out_gp['ra'] = h_shear['ra_lensed'].value[shear_indx]
+            h_out_gp['dec'] = h_shear['dec_lensed'].value[shear_indx]
+            s1 = h_shear['shear_1'].value[shear_indx]
+            s2 = h_shear['shear_2'].value[shear_indx]
+            k = h_shear['conv'].value[shear_indx]
+            u = 1.0/((1.0-k)**2 - s1**2 -s2**2)
+            h_out_gp['shear1'] = s1
+            h_out_gp['shear2'] = s2
+            h_out_gp['magnification'] = u
+            h_out_gp['convergence'] = k
+            # h_out_gp['ra'] = h_shear['ra_lensed'].value[mask]
+            # h_out_gp['dec'] = h_shear['dec_lensed'].value[mask]
+            # s1 = h_shear['shear_1'].value[mask]
+            # s2 = h_shear['shear_2'].value[mask]
+            # k = h_shear['conv'].value[mask]
+        else:
+            h_out_gp['shear1']        = np.zeros(0, dtype=np.float)
+            h_out_gp['shear2']        = np.zeros(0, dtype=np.float)
+            h_out_gp['magnification'] = np.zeros(0, dtype=np.float)
+            h_out_gp['convergence']   = np.zeros(0, dtype=np.float)
 
-        # h_out_gp['ra'] = h_shear['ra_lensed'].value[mask]
-        # h_out_gp['dec'] = h_shear['dec_lensed'].value[mask]
-        # s1 = h_shear['shear_1'].value[mask]
-        # s2 = h_shear['shear_2'].value[mask]
-        # k = h_shear['conv'].value[mask]
-        u = 1.0/((1.0-k)**2 - s1**2 -s2**2)
-        h_out_gp['shear1'] = s1
-        h_out_gp['shear2'] = s2
-        h_out_gp['magnification'] = u
-        h_out_gp['convergence'] = k
     else:
         print('\tprotoDC2 shear style')
+        #No protection against empty step. This is only a feature of CosmoDC2
         h_out_gp['ra'] = h_in['ra_lensed'].value[mask]
         h_out_gp['dec'] = h_in['dec_lensed'].value[mask]
         h_out_gp['shear1'] = h_in['shear1'].value[mask]
@@ -1033,17 +1083,26 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['convergence'] = h_in['convergence'].value[mask]
 
     if healpix:
-        h_out_gp['galaxyID'] = h_in['galaxy_id'].value[mask]
-    central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
-    central = h_in['upid'].value[mask] == -1
-    assert np.sum(central_2 != central) == 0, "double centrals?"
-    h_out_gp['isCentral'] = central
-    h_out_gp['hostHaloTag'] = h_in['target_halo_fof_halo_id'].value[mask]
-    h_out_gp['uniqueHaloID'] = h_in['target_halo_id'].value[mask]#h_in['halo_id'].value[mask]
-    h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value[mask]
-    unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
-    h_out_gp['NumberSelected'] = cnt[indx]
-
+        if non_empty_step:
+            h_out_gp['galaxyID'] = h_in['galaxy_id'].value[mask]
+        else:
+            h_out_gp['galaxyID'] = np.zeros(0, dtype=np.int64)
+    # central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
+    if non_empty_step:
+        central = h_in['upid'].value[mask] == -1
+        h_out_gp['isCentral'] = central
+        h_out_gp['hostHaloTag'] = h_in['target_halo_fof_halo_id'].value[mask]
+        h_out_gp['uniqueHaloID'] = h_in['target_halo_id'].value[mask]#h_in['halo_id'].value[mask]
+        h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value[mask]
+        unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
+        h_out_gp['matchUp/NumberSelected'] = cnt[indx]
+    else:
+        h_out_gp['isCentral'] = np.zeros(0, dtype=bool)
+        h_out_gp['hostHaloTag'] = np.zeros(0, dtype=np.int64)
+        h_out_gp['uniqueHaloID'] = np.zeros(0, dtype=np.int64)
+        h_out_gp['hostHaloMass'] = np.zeros(0, dtype=np.float)
+        h_out_gp['matchUp/NumberSelected'] = np.zeros(0,dtype=np.int)
+    # assert np.sum(central_2 != central) == 0, "double centrals?"
     tf = time.time()
     if verbose:
         print("\tDone overwrite columns", tf-t1)
@@ -1225,10 +1284,14 @@ def add_size_quantities(output_fname):
     hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
     mag_r = hgroup['SDSS_filters/magnitude:SDSS_r:rest'].value
     redshift = hgroup['redshift'].value
-    arcsec_per_kpc = interp1d(redshift,cosmo.arcsec_per_kpc_proper(redshift).value)
+    if len(redshift) > 0:
+        arcsec_per_kpc = interp1d(redshift,cosmo.arcsec_per_kpc_proper(redshift).value)
+        f = arcsec_per_kpc(redshift)
+    else:
+        f = np.zeros(0, dtype=np.float)
     size_disk = mc_size_vs_luminosity_late_type(mag_r, redshift)
     size_sphere = mc_size_vs_luminosity_early_type(mag_r, redshift)
-    f = arcsec_per_kpc(redshift)
+
     hgroup['morphology/spheroidHalfLightRadius'] =       size_sphere
     hgroup['morphology/spheroidHalfLightRadiusArcsec'] = size_sphere*f
     hgroup['morphology/diskHalfLightRadius'] =       size_disk
@@ -1353,7 +1416,7 @@ def combine_step_lc_into_one(step_fname_list, out_fname, healpix=False):
         gp = hfile['galaxyProperties']
         hfile_steps.append(hfile)
         hfile_steps_gp.append(gp)
-    keys = get_keys(hfile_steps_gp[0])
+    keys = get_keys(hfile_steps_gp[-1])
     for i,key in enumerate(keys):
         t1 = time.time()
         print("{}/{} {}".format(i,len(keys),key))
