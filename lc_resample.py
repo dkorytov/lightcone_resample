@@ -580,19 +580,14 @@ def soft_transition(vals, trans_start, trans_end):
     slct_between = (vals>trans_start) & (vals<trans_end)
     if(trans_start == trans_end or np.sum(slct_between) == 0):
         return vals>trans_start
-    elif( np.sum(slct_between) == 1):
-        # Fuzzy digitize must have at least 1 element between
-        result = np.ones(vals.size, dtype='bool')
-        result[vals<=trans_start] = False
-        result[vals>=trans_end] = True
-        result[slct_between] = np.random.rand() > 0.5
     elif(trans_start > trans_end):
         raise ValueError('Trans_start value is greater than trans_end')
     else:
-        print(trans_start, trans_end)
-        print(vals.size)
-
-        bins = fuzzy_digitize(vals[slct_between],[trans_start,trans_end])
+        # print(trans_start, trans_end)
+        # print(vals.size)
+        # print(np.sum(slct_between))
+        # print(vals[slct_between])
+        bins = fuzzy_digitize(vals[slct_between],[trans_start,trans_end], min_counts=0)
         result = np.ones(vals.size, dtype='bool')
         result[vals<=trans_start] = False
         result[slct_between] = bins==1
