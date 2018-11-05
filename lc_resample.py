@@ -1426,8 +1426,8 @@ def combine_step_lc_into_one(step_fname_list, out_fname, healpix=False):
         data_list = []
         #units = None
         for h_gp in hfile_steps_gp:
-            data_list.append(h_gp[key].value)
-            #units = h_gp[key].attrs['units']
+            if key in h_gp:
+                data_list.append(h_gp[key].value)
         data = np.concatenate(data_list)
         hfile_gp_out[key]=data
         #hfile_gp_out[key].attrs['units']=units
