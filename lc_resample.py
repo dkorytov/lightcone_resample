@@ -259,7 +259,6 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         lc_data['redshift'] = np.zeros(0, dtype=np.float)
         lc_data['sfr_percentile'] = np.zeros(0, dtype=np.float)
     if recolor:
-        print(hfile.keys())
         upid_mock = hfile['upid'].value
         mstar_mock = hfile['obs_sm'].value
         sfr_percentile_mock = hfile['sfr_percentile'].value
@@ -287,7 +286,7 @@ def construct_lc_data(fname, match_obs_color_red_seq = False,
         lc_data['clr_ri'] = c
         #lc_data['Mag_r'], lc_data['clr_gr'], lc_data['clr_ri'] = [a,b,c]
     if match_obs_color_red_seq and non_empty_step:
-        print("match obs color red seq")
+        # print("match obs color red seq")
         host_halo_mvir_mock = hfile['host_halo_mvir'].value    
         is_on_red_seq_gr = hfile['is_on_red_sequence_gr'].value
         is_on_red_seq_ri = hfile['is_on_red_sequence_ri'].value
@@ -319,8 +318,11 @@ def construct_lc_data_healpix(fname, match_obs_color_red_seq = False,
                               verbose = False, recolor=False, internal_step=None,
                               cut_small_galaxies_mass = None, healpix_pixels=None, 
                               red_sequence_transition_mass_start=13.0,  red_sequence_transition_mass_end=13.5):
-    print("Construicting light cone data: ",healpix_pixels)
+    print("Construicting light cone data.")
+    print("Input lightcone file pattern: ", fname)
+    print("Healpix files: ",healpix_pixels)
     if healpix_pixels is None:
+        print("No healpix used")
         lc_data = construct_lc_data(fname, match_obs_color_red_seq = match_obs_color_red_seq,
                                     verbose = verbose, recolor=recolor, internal_step = internal_step,
                                     cut_small_galaxies_mass = cut_small_galaxies_mass,
@@ -330,12 +332,13 @@ def construct_lc_data_healpix(fname, match_obs_color_red_seq = False,
         lc_data_hps = []
         for healpix_pixel in healpix_pixels:
             fname_healpix = fname.replace('${healpix}', str(healpix_pixel))
-            print(fname_healpix)
-            lc_data_hp = construct_lc_data(fname_healpix, match_obs_color_red_seq = match_obs_color_red_seq,
-                                           verbose = verbose, recolor=recolor, internal_step = internal_step,
+            lc_data_hp = construct_lc_data(fname_healpix, 
+                                           match_obs_color_red_seq = match_obs_color_red_seq,
+                                           recolor=recolor, 
+                                           internal_step = internal_step,
                                            cut_small_galaxies_mass = cut_small_galaxies_mass,
                                            red_sequence_transition_mass_start = red_sequence_transition_mass_start,
-                                           red_sequence_transition_mass_end = red_sequence_transition_mass_end)
+                                           red_sequence_transition_mass_end = red_sequence_transition_mass_end, verbose=False)
 
             lc_data_hp['healpix_pixel'] = np.ones(lc_data_hp['m_star'].size, dtype='i4')*healpix_pixel
             lc_data_hps.append(lc_data_hp)
