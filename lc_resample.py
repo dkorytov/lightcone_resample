@@ -400,13 +400,13 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling")
-        print("\n Num LC Galaxies: {:.2e} Num Gltcs Galaxies: {:.2e}".format(lc_data['m_star'].size, gal_prop['m_star'].size))
+        print("\nNum LC Galaxies: {:.2e} Num Gltcs Galaxies: {:.2e}".format(lc_data['m_star'].size, gal_prop['m_star'].size))
     m_star = lc_data['m_star']
     mag_r  = lc_data['Mag_r']
     clr_gr = lc_data['clr_gr']
     clr_ri = lc_data['clr_ri']
     if ignore_mstar:
-        print("Ignoring Mstar!")
+        print("\tIgnoring Mstar!")
         lc_mat = np.stack((mag_r,clr_gr,clr_ri),axis=1)
         gal_mat = np.stack((gal_prop['Mag_r'],
                             gal_prop['clr_gr'],
@@ -417,7 +417,6 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
                             gal_prop['clr_gr'],
                             gal_prop['clr_ri'],
                             gal_prop['m_star']),axis=1)
-    print("lc shape: ", np.shape(lc_mat.shape))
     if ignore_bright_luminosity:
         lc_mat = squash_magnitudes(lc_mat, ignore_bright_luminosity_threshold, ignore_bright_luminosity_softness)
         gal_mat = squash_magnitudes(gal_mat, ignore_bright_luminosity_threshold, ignore_bright_luminosity_softness)
@@ -425,7 +424,6 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
         # lc_mat[slct_lc_mat,0] = ignore_bright_luminosity_threshold
         # slct_gal_mat = gal_mat[:,0]< ignore_bright_luminosity_threshold
         # gal_mat[slct_gal_mat,0] = ignore_bright_luminosity_threshold
-    print("lc shape: ", np.shape(lc_mat.shape))
     if verbose:
         t2 = time.time()
         print('\tdone formating data. {}'.format(t2-t1))
@@ -968,8 +966,6 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
             pass 
 
     t3 = time.time()
-    if verbose:
-        print("\t done overwriting xyz, v_(xyz)",t3-t2)
     #peculiar velocity
     _,z_obs,v_pec,_,_,_,_ = pecZ(x,y,z,vx,vy,vz,redshift)
     h_out_gp['peculiarVelocity'] = np.array(v_pec, dtype='f4')
@@ -1050,7 +1046,8 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         print("\thealpix shears")
         h_shear = h5py.File(healpix_shear_file, 'r')[str(step)]
         shear_id = h_shear['galaxy_id'].value
-        if non_empty_step:
+        if step_has_data:
+            print("\t\tassigning shears ")
             base_id = h_in['galaxy_id'].value[mask]
             srt = np.argsort(shear_id)
             shear_indx = dtk.search_sorted(shear_id, base_id, sorter=srt)
@@ -1071,6 +1068,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
             # s2 = h_shear['shear_2'].value[mask]
             # k = h_shear['conv'].value[mask]
         else:
+            print("\t\tno data in this step, setting it all to zeros")
             h_out_gp['shear1']        = np.zeros(0, dtype=np.float)
             h_out_gp['shear2']        = np.zeros(0, dtype=np.float)
             h_out_gp['magnification'] = np.zeros(0, dtype=np.float)
@@ -2053,6 +2051,8 @@ def lightcone_resample(param_file_name):
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
     if healpix_file:
         assert ("${healpix}" in output_fname), "Must have ${healpix} string in output while using healpix"
+    if fake_lensing:
+        assert ((healpix_shear_file is None) or healpix_shear_file == "NULL"), "If `fake_lensing` is set to true, healpix_shear_file must either not in the param file or set to NULL."
     if not cut_small_galaxies: # if we don't cut out small galaxies, set the mass limit
         cut_small_galaxies_mass = None # to None as a flag for other parts in the code
     # Load Eve's galmatcher mask. Another script writes the mask to file (Need to check which one)
@@ -2135,22 +2135,22 @@ def lightcone_resample(param_file_name):
         #There is no other option. I just don't want to re-indent this entire block of code--
         #emacs doesn't re-indent python code well
         if(use_slope): 
-            print("using slope", step)
+            print("using interpolation on step", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
             lc_a_cc = np.copy(lc_a) # galaxy scale factor for copy columns
             del_lc_a =  np.max(lc_a) - np.min(lc_a)
             step_a = np.min(lc_a)-0.01*del_lc_a #so no galaxy is exactly on the egdge of the bins
             step2_a = np.max(lc_a)+0.01*del_lc_a
             print('=======')
-            print("lc min a:       {}".format(step_a))
-            print("lc raw min a:   {}".format(np.min(lc_a)))
-            print("dtk step min a: {}".format(stepz.get_a(step)))
-            print("gltcs        a: {}".format(1.0/(2.0180+1.0)) )  
-            print('=======')
-            print("lc max a        {}".format(step2_a))
-            print("lc raw max a:   {}".format(np.max(lc_a)))
-            print("dtk step max a: {}".format(stepz.get_a(step2)))
-            print("gltcs        a: {}".format(1.0/(1.9472+1.0)))
+            print("lightcone min a:       {}".format(step_a))
+            # print("lc raw min a:   {}".format(np.min(lc_a)))
+            # print("dtk step min a: {}".format(stepz.get_a(step)))
+            # print("gltcs        a: {}".format(1.0/(2.0180+1.0)) )  
+            # print('=======')
+            print("lightcone max a        {}".format(step2_a))
+            # print("lc raw max a:   {}".format(np.max(lc_a)))
+            # print("dtk step max a: {}".format(stepz.get_a(step2)))
+            # print("gltcs        a: {}".format(1.0/(1.9472+1.0)))
             print("===================")
 
             abins = np.linspace(step_a, step2_a,substeps+1)
@@ -2160,7 +2160,6 @@ def lightcone_resample(param_file_name):
             match_luminosity_factors = -1*np.ones(lc_data['redshift'].size,dtype='f4')
             match_library_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
             match_node_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
-            print("abins_avg: ", abins_avg)
             for k in range(0,abins_avg.size):
                 print("\t{}/{} substeps".format(k,abins_avg.size))
                 slct_lc_abins1 = (abins[k]<=lc_a) 
@@ -2177,7 +2176,7 @@ def lightcone_resample(param_file_name):
                 if use_dust_factor:
                     gal_prop_list = [] 
                     for dust_factor in np.concatenate(([1.0],dust_factors)):
-                        print("dust_factor********=",dust_factor)
+                        print("\tdust_factor********=",dust_factor)
                         # gal_prop_tmp,_ = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
                         #                                                          step_a, abins_avg[k],
                         #                                                          verbose = verbose,
@@ -2215,9 +2214,6 @@ def lightcone_resample(param_file_name):
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
                     # offset the index for the extra dust gal_prop 
-                    print('index_abin: ', np.min(index_abin), np.max(index_abin))
-                    print('gal_prop_a: ', np.min(gal_prop_a['index']), np.max(gal_prop_a['index']))
-                    print('gal_prop_a size: ', gal_prop_a['index'].size, "index_abin size: ", index_abin.size)
                     index[slct_lc_abin] = gal_prop_a['index'][index_abin]
                     # = index_abin%(index_abin.size//(1+len(dust_factors)))
                     # Record the dust factor for the matched galaxy so that it can be applied 
