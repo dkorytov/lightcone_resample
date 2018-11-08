@@ -901,8 +901,8 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     else:
         h_in = h5py.File(input_fname,'r')[str(internal_step)]
     # if the input file has no galaxies, it doesn't have any columns
-    non_empty_step = "obs_sm" in h_in
-    if non_empty_step:
+    step_has_data = "obs_sm" in h_in
+    if step_has_data:
         sm = h_in['obs_sm'].value
     else:
         sm = np.zeros(0, dtype=float)
@@ -915,7 +915,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
     if verbose:
         print("\t done reading in data", t2-t1)
     #xyz,v(xyz)
-    if non_empty_step:
+    if step_has_data:
         x = h_in['x'].value[mask]
         y = h_in['y'].value[mask]
         z = h_in['z'].value[mask]
@@ -954,7 +954,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
             total_key = key.replace('spheroid','total')
             h_out_gp[total_key] = np.array(h_out_gp[disk_key].value + h_out_gp[spheroid_key].value, dtype='f4')
     if ignore_mstar:
-        if non_empty_step:
+        if step_has_data:
             print("Ignoring M* in stellar mass assignment!")
             # m*_delta = M*_new/M*_old
             mstar_delta = h_in['obs_sm'].value[mask]/h_out_gp['totalMassStellar'].value
@@ -983,54 +983,37 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         # Calculating new observer frame magnitudes
         if("totalLuminositiesStellar" in key and  ":observed" in key and ("SDSS" in key or "LSST" in key)):
             new_key = key.replace("totalLuminositiesStellar",'magnitude',1)
-            print("making: "+new_key+" from "+key)
+            #print("making: "+new_key+" from "+key)
             h_out_gp[new_key]=np.array(adjust_mag -2.5*np.log10(h_out_gp[key].value), dtype='f4')
         # Calculating new rest frame magnitudes
         if("totalLuminositiesStellar" in key and  ":rest" in key and ("SDSS" in key or "LSST" in key)):
             new_key = key.replace("totalLuminositiesStellar","magnitude",1)
-            print("making: "+new_key+" from "+key)
+            #print("making: "+new_key+" from "+key)
             h_out_gp[new_key]=np.array(-2.5*np.log10(h_out_gp[key].value), dtype='f4')
 
-    # redshift_org = h_out_gp['redshiftHubble'].value
-
-    # dl_org = z_to_dl(redshift_org)
-    # adjust_org = -2.5*np.log10(1.0+redshift_org) + 5*np.log10(dl_org)
-    # dl_new = z_to_dl(redshift_new)
-    # adjust_new = -2.5*np.log10(1.0+redshift_new) + 5*np.log10(dl_new)
-    # t4 = time.time()
-    # if verbose:
-    #     print("\t done calculating mag adjustment")
-    # adjust_tot = -adjust_org + adjust_new
-    # keys = get_keys(h_out_gp)
-    # for key in keys:
-    #     if "magnitude" in key and "observed" in key:
-    #         print("\t\tadjusting mag: {}".format(key))
-    #         h_out_gp[key][:] = h_out_gp[key].value + adjust_tot
     t5 = time.time()
     if verbose:
         print("\t done rewriting mags",t5-t4)
     #redshift
     h_out_gp['redshift'] = z_obs
     h_out_gp['redshiftHubble'] = redshift
-    if non_empty_step:
+    if step_has_data:
         h_out_gp['ra_true'] = h_in['ra'].value[mask]
         h_out_gp['dec_true'] = h_in['dec'].value[mask]
     else:
         h_out_gp['ra_true'] = np.zeros(0, dtype=np.float)
         h_out_gp['dec_true'] = np.zeros(0, dtype=np.float)
-
-    print("step in no_shear_steps", (step in no_shear_steps))
-    print(step, no_shear_steps)
-    print(step in no_shear_steps)
+        
+    # Skip shears for this step if it's in the list 
     if no_shear_steps is not None:
-        fake_lensing = fake_lensing or (step in no_shear_steps)
+        fake_lensing_step = (step in no_shear_steps)
         if (step in no_shear_steps):
             print("==== no shear step ====", step)
-
-    if fake_lensing:
+            pritn("\t step {} is list as in no_shear_steps".format(step), no_shear_steps)
+    
+    if fake_lensing or fake_lensing_step:
         print("\tfake shears")
-
-        if non_empty_step:
+        if step_has_data:
             size = h_in['ra'].size
             h_out_gp['ra'] = h_in['ra'].value[mask]
             h_out_gp['dec'] = h_in['dec'].value[mask]
@@ -1085,12 +1068,12 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['convergence'] = h_in['convergence'].value[mask]
 
     if healpix:
-        if non_empty_step:
+        if step_has_data:
             h_out_gp['galaxyID'] = h_in['galaxy_id'].value[mask]
         else:
             h_out_gp['galaxyID'] = np.zeros(0, dtype=np.int64)
     # central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
-    if non_empty_step:
+    if step_has_data:
         central = h_in['upid'].value[mask] == -1
         h_out_gp['isCentral'] = central
         h_out_gp['hostHaloTag'] = h_in['target_halo_fof_halo_id'].value[mask]
