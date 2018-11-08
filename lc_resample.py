@@ -1072,7 +1072,7 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
             h_out_gp['galaxyID'] = h_in['galaxy_id'].value[mask]
         else:
             h_out_gp['galaxyID'] = np.zeros(0, dtype=np.int64)
-    # central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
+
     if step_has_data:
         central = h_in['upid'].value[mask] == -1
         h_out_gp['isCentral'] = central
@@ -1087,8 +1087,8 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['uniqueHaloID'] = np.zeros(0, dtype=np.int64)
         h_out_gp['hostHaloMass'] = np.zeros(0, dtype=np.float)
         h_out_gp['matchUp/NumberSelected'] = np.zeros(0,dtype=np.int)
-    # TODO: Reinsert central check
-    # assert np.sum(central_2 != central) == 0, "double centrals?"
+    central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
+    assert np.sum(central_2 != central) == 0, "double centrals? centrals by upid {}, centrals by halo centric position {}".format(np.sum(central), np.sum(central_2))
     tf = time.time()
     if verbose:
         print("\tDone overwrite columns", tf-t1)
