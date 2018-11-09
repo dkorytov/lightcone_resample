@@ -848,7 +848,6 @@ def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
     for healpix_pixel in healpix_pixels:
         hp_fname = output_fname.replace("${healpix}", str(healpix_pixel))
         dtk.ensure_dir(hp_fname)
-        print(hp_fname)
         h_out = h5py.File(hp_fname,'w')
         h_out_gps[healpix_pixel] = h_out.create_group('galaxyProperties')
         slct = lc_healpix == healpix_pixel
@@ -1378,8 +1377,8 @@ def add_ellipticity_quantities(output_fname, verbose = False):
     hgroup['morphology/totalEllipticity1'] = np.array(np.cos(2.0*pos_angle)*tot_ellip, dtype='f4')
     hgroup['morphology/totalEllipticity2'] = np.array(np.sin(2.0*pos_angle)*tot_ellip, dtype='f4')
     hgroup['morphology/positionAngle'] = np.array(pos_angle*180.0/np.pi, dtype='f4')
-    print("position angle writen: ", np.array(pos_angle*180.0/np.pi, dtype='f4'))
-    print("position angle writen: ", np.array(pos_angle*180.0/np.pi, dtype='f4').size)
+    # print("position angle writen: ", np.array(pos_angle*180.0/np.pi, dtype='f4'))
+    # print("position angle writen: ", np.array(pos_angle*180.0/np.pi, dtype='f4').size)
     srsc_indx_disk = 1.0*np.ones(lum_disk.size,dtype='f4')
     srsc_indx_sphere = 4.0*np.ones(lum_disk.size,dtype='f4')
     srsc_indx_tot = (srsc_indx_disk*lum_disk + srsc_indx_sphere*lum_sphere)/(lum_tot)
