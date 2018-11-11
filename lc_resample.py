@@ -1080,14 +1080,14 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
         h_out_gp['hostHaloMass'] = h_in['target_halo_mass'].value[mask]
         unq, indx, cnt = np.unique(h_out_gp['infallIndex'].value, return_inverse=True, return_counts = True)
         h_out_gp['matchUp/NumberSelected'] = cnt[indx]
+        central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
+        assert np.sum(central_2 != central) == 0, "double centrals? centrals by upid {}, centrals by halo centric position {}".format(np.sum(central), np.sum(central_2))
     else:
         h_out_gp['isCentral'] = np.zeros(0, dtype=bool)
         h_out_gp['hostHaloTag'] = np.zeros(0, dtype=np.int64)
         h_out_gp['uniqueHaloID'] = np.zeros(0, dtype=np.int64)
         h_out_gp['hostHaloMass'] = np.zeros(0, dtype=np.float)
         h_out_gp['matchUp/NumberSelected'] = np.zeros(0,dtype=np.int)
-    central_2 = (h_in['host_centric_x'].value[mask] ==0) & (h_in['host_centric_y'].value[mask] ==0) & (h_in['host_centric_z'].value[mask] == 0)
-    assert np.sum(central_2 != central) == 0, "double centrals? centrals by upid {}, centrals by halo centric position {}".format(np.sum(central), np.sum(central_2))
     tf = time.time()
     if verbose:
         print("\tDone overwrite columns", tf-t1)
