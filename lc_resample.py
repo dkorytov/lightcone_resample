@@ -482,43 +482,30 @@ def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, 
                                        verbose = False,
                                        ignore_bright_luminosity=False,
                                        ignore_bright_luminosity_threshold=False,
-                                       ignore_bright_luminosity_softness=0.0):
+                                       ignore_bright_luminosity_softness=0.0,
+                                       rs_scatter_dict = {}):
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling with obs colors")
     lc_data_list = []
     gal_prop_list = []
-
-    # lc_data_list += (lc_data['Mag_r']/3.0,
-    #                  lc_data['clr_gr']/2.0,
-    #                  lc_data['clr_ri'],
-    #                  lc_data['clr_gr_obs'],
-    #                  lc_data['clr_ri_obs'],
-    #                  lc_data['clr_iz_obs']/2.0)
-    # #slct_valid = np.abs(gal_prop['clr_gr_obs_lsst'] - gal_prop['clr_gr_obs'] )
-    # #print("valid cut on rs: ", np.sum(slct_valid)/slct_valid.size)
-    # #orignal_index = np.arange(gal_prop['Mag_r'].size, dtype='i4')
-    # gal_prop_list += (gal_prop['Mag_r'][slct_valid]/3.0,
-    #                   gal_prop['clr_gr'][slct_valid]/2.0,
-    #                   gal_prop['clr_ri'][slct_valid],
-    #                   gal_prop['clr_gr_obs'][slct_valid],
-    #                   gal_prop['clr_ri_obs'][slct_valid],
-    #                   gal_prop['clr_iz_obs'][slct_valid]/2.0)
+    # We modify the lightcone/baseDC2/query data with rs scatter, if listed
     lc_data_list += (lc_data['Mag_r'],
                      lc_data['clr_gr'],
                      lc_data['clr_ri'],
-                     lc_data['clr_gr_obs'],
-                     lc_data['clr_ri_obs'],
-                     lc_data['clr_iz_obs'])
-    #slct_valid = np.abs(gal_prop['clr_gr_obs_lsst'] - gal_prop['clr_gr_obs'] )
-    #print("valid cut on rs: ", np.sum(slct_valid)/slct_valid.size)
-    #orignal_index = np.arange(gal_prop['Mag_r'].size, dtype='i4')
+                     modify_array_with_rs_scatter(lc_data, "query", "gr", rs_scatter_dict), #clr_gr_obs
+                     modify_array_with_rs_scatter(lc_data, "query", "ri", rs_scatter_dict), #clr_ri_obs
+                     modify_array_with_rs_scatter(lc_data, "query", "iz", rs_scatter_dict), #clr_iz_obs
+    )
+    # We modify the galaxy properties/galactics/tree data with rs scatter, if listed
     gal_prop_list += (gal_prop['Mag_r'],
                       gal_prop['clr_gr'],
                       gal_prop['clr_ri'],
-                      gal_prop['clr_gr_obs'],
-                      gal_prop['clr_ri_obs'],
-                      gal_prop['clr_iz_obs'],)
+                      modify_array_with_rs_scatter(gal_prop, "tree", "gr", rs_scatter_dict), #clr_gr_obs
+                      modify_array_with_rs_scatter(gal_prop, "tree", "ri", rs_scatter_dict), #clr_ri_obs
+                      modify_array_with_rs_scatter(gal_prop, "tree", "iz", rs_scatter_dict), #clr_iz_obs
+    )
+
     if ignore_mstar:
         pass
     else:
@@ -595,6 +582,44 @@ def soft_transition(vals, trans_start, trans_end):
         return result
 
 
+def get_rs_scatter_dict_from_param(param):
+    """This function takes in a dtk.Param object and returns a dictionary 
+    containing the scatter"""
+    rs_scatter_dict = {}
+    colors = ['gr', 'ri', 'iz']
+    scatter_locations = ['query', 'kdtree']
+    for scatter_loc in scatter_locations:
+        for color in colors:
+            key = "rs_scatter_{}_{}".format(scatter_loc, colors)
+            if key in param:
+                rs_scatter_dict[key] = param.get_float(key)
+    return rs_scatter_dict
+    
+def modify_data_with_rs_scatter(data_dict, data_type, rs_scatter_dict):
+    data_dict = data_dict.copydeep()
+    assert data_type == "query" or data_type == "tree", "Data type must be either \"query\" or \"tree\". Given data_type is {}".format(data_type)
+    colors = ['gr', 'ri', 'iz']
+    for color in colors:
+        rs_scatter_key = 'rs_scatter_{}_{}'.format(data_type, color)
+        if rs_scatter_key in rs_scatter_dict:
+            data = query_dict["clr_{}_obs".format(color)]
+            scatter = np.random.normal(scale=rs_scatter_dict[key]
+                                       size =data.size)
+            query_dict["clr_{}_obs".format(color)] = data + scatter
+    return data_dict
+
+def modify_array_with_rs_scatter(data_dict, data_type, color, rs_scatter_dict):
+    assert data_type == "query" or data_type == "tree", "Data type must be either \"query\" or \"tree\". Given data_type is {}".format(data_type)
+    data = data_dict['clr_{}_obs'.format(color)]
+    rs_scatter_key = "rs_scatter_{}_{}".format(data_type, color)
+    if rs_scatter_key in rs_scatter_dict:
+        scatter =  np.random.normal(scale=rs_scatter_dict[key]
+                                    size =data.size)
+        return data+scatter
+    else:
+        return data
+
+                     
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
                'redshiftHubble','placementType','isCentral','hostIndex', 
                'blackHoleAccretionRate','blackHoleMass', 'step','infallHaloMass','infallHaloTag')
@@ -2023,7 +2048,8 @@ def lightcone_resample(param_file_name):
         metadata_only = param.get_bool('metadata_only')
     else:
         metadata_only = False
-
+    # Adding scatter to the red squence
+    rs_scatter_dict = get_rs_scatter_dict_from_param(param)
     red_sequence_transition_mass_start = red_sequence_transition_mass_start,
     red_sequence_transition_mass_end = red_sequence_transition_mass_end
 
@@ -2191,7 +2217,8 @@ def lightcone_resample(param_file_name):
                             verbose = verbose,
                             ignore_bright_luminosity=ignore_bright_luminosity,
                             ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
-                            ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
+                            ignore_bright_luminosity_softness = ignore_bright_luminosity_softness,
+                            rs_scatter_dict = rs_scatter_dict)
                         index_abin[slct_clstr_red_squence] = index_abin_crs
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
