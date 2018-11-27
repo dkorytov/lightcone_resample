@@ -585,16 +585,20 @@ def soft_transition(vals, trans_start, trans_end):
 def get_rs_scatter_dict_from_param(param):
     """This function takes in a dtk.Param object and returns a dictionary 
     containing the scatter"""
+    print("seaching param file for red squence scatter information")
     rs_scatter_dict = {}
     colors = ['gr', 'ri', 'iz']
-    scatter_locations = ['query', 'kdtree']
+    scatter_locations = ['query', 'tree']
     for scatter_loc in scatter_locations:
         for color in colors:
-            key = "rs_scatter_{}_{}".format(scatter_loc, colors)
+            key = "red_sequence_scatter_{}_{}".format(scatter_loc, color)
             if key in param:
-                rs_scatter_dict[key] = param.get_float(key)
+                val = param.get_float(key)
+                print("found {} = {:f} in param file".format(key, val))
+                rs_scatter_dict[key] = val
     return rs_scatter_dict
     
+
 def modify_data_with_rs_scatter(data_dict, data_type, rs_scatter_dict):
     data_dict = data_dict.copydeep()
     assert data_type == "query" or data_type == "tree", "Data type must be either \"query\" or \"tree\". Given data_type is {}".format(data_type)
@@ -603,17 +607,19 @@ def modify_data_with_rs_scatter(data_dict, data_type, rs_scatter_dict):
         rs_scatter_key = 'rs_scatter_{}_{}'.format(data_type, color)
         if rs_scatter_key in rs_scatter_dict:
             data = query_dict["clr_{}_obs".format(color)]
-            scatter = np.random.normal(scale=rs_scatter_dict[key]
+            scatter = np.random.normal(scale=rs_scatter_dict[key],
                                        size =data.size)
             query_dict["clr_{}_obs".format(color)] = data + scatter
     return data_dict
 
+
 def modify_array_with_rs_scatter(data_dict, data_type, color, rs_scatter_dict):
     assert data_type == "query" or data_type == "tree", "Data type must be either \"query\" or \"tree\". Given data_type is {}".format(data_type)
     data = data_dict['clr_{}_obs'.format(color)]
-    rs_scatter_key = "rs_scatter_{}_{}".format(data_type, color)
+    rs_scatter_key = "red_sequence_scatter_{}_{}".format(data_type, color)
     if rs_scatter_key in rs_scatter_dict:
-        scatter =  np.random.normal(scale=rs_scatter_dict[key]
+        print("modifying {} data: color {} ".format(data_type, color))
+        scatter =  np.random.normal(scale=rs_scatter_dict[rs_scatter_key],
                                     size =data.size)
         return data+scatter
     else:
@@ -1638,7 +1644,6 @@ def add_units(out_fname):
             print("===================")
             #raise;
 
-
 def plot_differences(lc_data, gal_prop, index):
     keys = ['Mag_r','clr_gr','clr_ri','m_star']
     dist = {}
@@ -2205,6 +2210,7 @@ def lightcone_resample(param_file_name):
                                             ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
                 #If we are matching on observed colors for cluster red seqence guys:
                 if match_obs_color_red_seq:
+                    print("Matching on obs red seq")
                     #Create a lc_data with only cluster red sequence galaxies
                     slct_clstr_red_squence = lc_data_a['is_cluster_red_sequence']
                     if np.sum(slct_clstr_red_squence) > 0:
@@ -2220,6 +2226,8 @@ def lightcone_resample(param_file_name):
                             ignore_bright_luminosity_softness = ignore_bright_luminosity_softness,
                             rs_scatter_dict = rs_scatter_dict)
                         index_abin[slct_clstr_red_squence] = index_abin_crs
+                    else:
+                        print("\tno red squence galaxies, so skipping...")
                 if use_dust_factor:
                     # Get the Galacticus galaxy index, the division is to correctly
                     # offset the index for the extra dust gal_prop 
