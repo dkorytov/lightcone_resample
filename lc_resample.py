@@ -29,6 +29,8 @@ from ellipticity_model import monte_carlo_ellipticity_bulge_disk
 from halotools.utils import fuzzy_digitize
 import galmatcher 
 
+from lc_resample_plot import *
+
 def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
     t1 = time.time()
     gal_prop = {}
@@ -1535,340 +1537,12 @@ def add_units(out_fname):
             print("column", key, "was not assigned a unit :(")
             print("===================")
 
-def plot_differences(lc_data, gal_prop, index):
-    keys = ['Mag_r','clr_gr','clr_ri','m_star']
-    dist = {}
-    dist_all = None
-    for key in keys:
-        d = lc_data[key]-gal_prop[key][index]
-        dist[key] = d
-        if(dist_all is None):
-            dist_all = d*d
-        else:
-            dist_all += d*d
-    dist_all = np.sqrt(dist_all)
-    plt.figure()
-    for key in keys:
-        slct_fnt = np.isfinite(dist[key])
-        bins = np.linspace(np.min(dist[key][slct_fnt]), np.max(dist[key][slct_fnt]), 100)
-        h,xbins = np.histogram(dist[key][slct_fnt],bins=bins)
-        plt.plot(dtk.bins_avg(xbins),h,label=key)
-    plt.yscale('log')
-    plt.grid()
-    plt.legend(loc='best')
-    plt.xlabel('original value - matched value')
-    plt.ylabel('count')
-    plt.figure()
-    slct_fnt = np.isfinite(dist_all)
-    bins = np.linspace(np.min(dist_all[slct_fnt]), np.max(dist_all[slct_fnt]), 100)
-    h,xbins = np.histogram(dist_all[slct_fnt],bins=bins)
-    plt.plot(dtk.bins_avg(xbins),h,label='all',lw=2.0)
-    for key in keys:
-        slct_fnt = np.isfinite(dist[key])
-        h,xbins = np.histogram(dist[key][slct_fnt],bins=xbins)
-        plt.plot(dtk.bins_avg(xbins),h,label=key)
-    plt.yscale('log')
-    plt.grid()
-    plt.legend(loc='best')
-    plt.xlabel('distance in match')
-    plt.ylabel('count')
-    return
-
-
-def plot_differences_obs_color(lc_data, gal_prop, index):
-    slct = lc_data['is_cluster_red_sequence']
-    keys = ['Mag_r','clr_gr','clr_ri', 'clr_gr_obs', 'clr_ri_obs', 'clr_iz_obs']
-    dist = {}
-    dist_all = None
-    for key in keys:
-        d = lc_data[key][slct]-gal_prop[key][index][slct]
-        dist[key] = d
-        if(dist_all is None):
-            dist_all = d*d
-        else:
-            dist_all += d*d
-    dist_all = np.sqrt(dist_all)
-    plt.figure()
-    for key in keys:
-        slct_fnt = np.isfinite(dist[key])
-        bins = np.linspace(np.min(dist[key][slct_fnt]), np.max(dist[key][slct_fnt]), 100)
-        h,xbins = np.histogram(dist[key][slct_fnt],bins=bins)
-        plt.plot(dtk.bins_avg(xbins),h,label=key)
-    plt.yscale('log')
-    plt.grid()
-    plt.legend(loc='best')
-    plt.xlabel('original value - matched value')
-    plt.ylabel('count')
-
-    plt.figure()
-    slct_fnt = np.isfinite(dist_all)
-    bins = np.linspace(np.min(dist_all[slct_fnt]), np.max(dist_all[slct_fnt]), 100)
-    for key in keys:
-        slct_fnt = np.isfinite(dist[key])
-        h,xbins = np.histogram(dist[key][slct_fnt],bins=xbins)
-        plt.plot(dtk.bins_avg(xbins),h,label=key)
-    h,xbins = np.histogram(dist_all[slct_fnt],bins=bins)
-    plt.plot(dtk.bins_avg(xbins),h,label='all',lw=2.0)
-    plt.yscale('log')
-    plt.grid()
-    plt.legend(loc='best')
-    plt.xlabel('distance in match')
-    plt.ylabel('count')
-    return
-
-
-def plot_differences_2d(lc_data, gal_prop,index, x='Mag_r'):
-    keys = ['Mag_r','clr_gr','clr_ri','m_star']
-    for key in keys:
-        # if key == x:
-        #     continue
-        plt.figure()
-        h,xbins,ybins = np.histogram2d(lc_data[x],lc_data[key]-gal_prop[key][index],bins=(100,100))
-        plt.pcolor(xbins,ybins,h.T,cmap='PuBu',norm = clr.LogNorm())
-        plt.ylabel("diff {} (orginal-new)".format(key))
-        plt.xlabel(x)
-        plt.grid()
-    return
-
- 
-def plot_side_by_side(lc_data, gal_prop, index, x='Mag_r'):
-    keys =  ['Mag_r','clr_gr','clr_ri','m_star']
-    for key in keys:
-        if key == x:
-            continue
-        fig,axs = plt.subplots(1,3,sharey=True,sharex=True,figsize=(15,5))
-        h,xbins,ybins = np.histogram2d(lc_data[x],lc_data[key],bins=(100,100))
-        axs[0].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        axs[0].grid()
-        axs[0].set_title('UMachine + SDSS')
-        axs[0].set_xlabel(x)
-        axs[0].set_ylabel(key)
-
-        h,xbins,ybins = np.histogram2d(gal_prop[x][index],gal_prop[key][index],bins=(xbins,ybins))
-        axs[1].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        axs[1].grid()
-        axs[1].set_title('Matched Galacticus')
-        axs[1].set_xlabel(x)
-        axs[1].set_ylabel(key)
-
-        h,xbins,ybins = np.histogram2d(gal_prop[x],gal_prop[key],bins=(xbins,ybins))
-        axs[2].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-        axs[2].grid()
-        axs[2].set_title('Galacticus ')
-        axs[2].set_xlabel(x)
-        axs[2].set_ylabel(key)
-        
-    fig,axs = plt.subplots(1,3,sharey=True,sharex=True,figsize=(15,5))
-    h,xbins,ybins = np.histogram2d(lc_data['clr_gr'],lc_data['clr_ri'],bins=(100,100))
-    axs[0].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    axs[0].grid()
-    axs[0].set_title('UMachine + SDSS')
-    axs[0].set_xlabel('clr_gr')
-    axs[0].set_ylabel('clr_ri')
-    
-    h,xbins,ybins = np.histogram2d(gal_prop['clr_gr'][index],gal_prop['clr_ri'][index],bins=(xbins,ybins))
-    axs[1].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    axs[1].grid()
-    axs[1].set_title('Matched Galacticus')
-    axs[1].set_xlabel('clr_gr')
-    axs[1].set_ylabel('clr_ri')
-    
-    h,xbins,ybins = np.histogram2d(gal_prop['clr_gr'],gal_prop['clr_ri'],bins=(xbins,ybins))
-    axs[2].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    axs[2].grid()
-    axs[2].set_title('Galacticus ')
-    axs[2].set_xlabel('clr_gr')
-    axs[2].set_ylabel('clr_ri')
-        
-    return
-
-
-def plot_mag_r(lc_data,gal_prop,index):
-    plt.figure()
-    slct_fnt_lc = np.isfinite(lc_data['Mag_r'])
-    slct_fnt_gp = np.isfinite(gal_prop['Mag_r'][index])
-    max_r = np.max((np.max(lc_data['Mag_r'][slct_fnt_lc]),np.max(gal_prop['Mag_r'][index][slct_fnt_gp])))
-    min_r = np.min((np.min(lc_data['Mag_r'][slct_fnt_lc]),np.min(gal_prop['Mag_r'][index][slct_fnt_gp])))
-    bins = np.linspace(min_r,max_r,100)
-    h_lc,_ = np.histogram(lc_data['Mag_r'][slct_fnt_lc],bins=bins)
-    h_mg,_ = np.histogram(gal_prop['Mag_r'][index][slct_fnt_gp],bins=bins)
-    plt.plot(dtk.bins_avg(bins),h_lc, 'b', label='UMachine-SDSS')
-    plt.plot(dtk.bins_avg(bins),h_mg, 'r', label='Matched Glctcs')
-    plt.grid()
-    plt.xlabel("Mr")
-    plt.ylabel('Count')
-    plt.legend(loc='best')
-    return
-
-
-def plot_m_star(lc_data,gal_prop,index):
-    plt.figure()
-    max_r = np.max((np.max(lc_data['m_star']),np.max(gal_prop['m_star'][index])))
-    min_r = np.min((np.min(lc_data['m_star']),np.min(gal_prop['m_star'][index])))
-    bins = np.linspace(min_r,max_r,100)
-    h_lc,_ = np.histogram(lc_data['m_star'],bins=bins)
-    h_mg,_ = np.histogram(gal_prop['m_star'][index],bins=bins)
-    plt.plot(dtk.bins_avg(bins),h_lc, 'b', label='UMachine-SDSS')
-    plt.plot(dtk.bins_avg(bins),h_mg, 'r', label='Matched Glctcs')
-    plt.grid()
-    plt.xlabel("log10(Stellar Mass)")
-    plt.ylabel('Count')
-    plt.legend(loc='best')
-    return
-
-
-def plot_single_dist(lc_data,gal_prop,index,key_name,key_label,bins = None):
-    plt.figure()
-    if bins is None:
-        max_r = np.max((np.max(lc_data[key_name]),np.max(gal_prop[key_name][index])))
-        min_r = np.min((np.min(lc_data[key_name]),np.min(gal_prop[key_name][index])))
-        bins = np.linspace(min_r,max_r,100)
-    h_lc,_ = np.histogram(lc_data[key_name],bins=bins)
-    h_mg,_ = np.histogram(gal_prop[key_name][index],bins=bins)
-    plt.plot(dtk.bins_avg(bins),h_lc, 'b', label='UMachine-SDSS')
-    plt.plot(dtk.bins_avg(bins),h_mg, 'r', label='Matched Glctcs')
-    plt.grid()
-    plt.xlabel(key_label)
-    plt.ylabel('Count')
-    plt.legend(loc='best')
-    return
-
-
-def plot_clr_mag(lc_data,gal_prop,index,mag_bins,data_key, data_name):
-    fig,ax = plt.subplots(1,len(mag_bins),figsize=(15,5))
-    # max_gr = np.max((np.max(lc_data[data_key]),np.max(gal_prop[data_key])))
-    # min_gr = np.min((np.min(lc_data[data_key]),np.min(gal_prop[data_key])))
-    bins = np.linspace(0.0, 1.1, 50)
-    for i in range(0, len(mag_bins)):
-        if i == 0:
-            slct_lc = lc_data['Mag_r']<mag_bins[i]
-            slct_mg = gal_prop['Mag_r'][index]<mag_bins[i]
-            ax[i].set_title('Mr < {}'.format(mag_bins[i]))
-        else:
-            slct_lc = (mag_bins[i-1] < lc_data['Mag_r']) & ( lc_data['Mag_r'] < mag_bins[i])
-            slct_mg = (mag_bins[i-1] < gal_prop['Mag_r'][index]) & ( gal_prop['Mag_r'][index] < mag_bins[i])
-            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i-1], mag_bins[i]))
-        h_lc, _ = np.histogram(lc_data[data_key][slct_lc],bins=bins)
-        h_mg, _ = np.histogram(gal_prop[data_key][index][slct_mg],bins=bins)
-        ax[i].plot(dtk.bins_avg(bins),h_lc,'b', label = 'UMachine-SDSS')
-        ax[i].plot(dtk.bins_avg(bins),h_mg,'r', label = 'Matched Glctcs')
-        if i ==0:
-            ax[i].legend(loc='best', framealpha=0.3)
-        ax[i].set_xlabel(data_name)
-        ax[i].set_ylabel('Count')
-        ax[i].grid()
-        
-
-def plot_ri_gr_mag(lc_data, gal_prop, index, mag_bins):
-    fig,ax = plt.subplots(1,len(mag_bins),figsize=(15,5))
-    for i in range(0, len(mag_bins)):
-        if i == 0:
-            slct_lc = lc_data['Mag_r']<mag_bins[i]
-            slct_mg = gal_prop['Mag_r'][index]<mag_bins[i]
-            ax[i].set_title('Mr < {}'.format(mag_bins[i]))
-        else:
-            slct_lc = (mag_bins[i-1] < lc_data['Mag_r']) & ( lc_data['Mag_r'] < mag_bins[i])
-            slct_mg = (mag_bins[i-1] < gal_prop['Mag_r'][index]) & ( gal_prop['Mag_r'][index] < mag_bins[i])
-            ax[i].set_title('{} < Mr < {}'.format(mag_bins[i-1], mag_bins[i]))
-        # print('{} < Mr < {}'.format(mag_bins[i], mag_bins[i-1]))
-        # print(np.average(lc_data['Mag_r'][slct_lc]))
-        ax[i].plot(lc_data['clr_gr'][slct_lc], lc_data['clr_ri'][slct_lc],'.b',alpha=0.5,label='UMachine-SDSS',ms=4)
-        ax[i].plot(gal_prop['clr_gr'][index][slct_mg], gal_prop['clr_ri'][index][slct_mg],'.r',alpha=0.5,label='Matched Glctcs', ms=4)
-        if i ==0:
-            ax[i].legend(loc='best', framealpha=0.3)
-        ax[i].set_xlabel('g-r color')
-        ax[i].set_ylabel('r-i color')
-        ax[i].grid()
-
-
-def plot_clr_z(lc_data, gal_prop, index,clr='clr_gr'):
-    fig,axs = plt.subplots(1,3,sharey=True,sharex=True,figsize=(15,5))
-    h,xbins,ybins = np.histogram2d(lc_data['redshift'],lc_data[clr],bins=(100,100))
-    axs[0].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    axs[0].grid()
-    axs[0].set_title('UMachine + SDSS')
-    axs[0].set_xlabel('redshift')
-    axs[0].set_ylabel(clr)
-    h,xbins,ybins = np.histogram2d(gal_prop['redshift'][index],gal_prop[clr][index],bins=(xbins,ybins))
-    axs[1].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    axs[1].grid()
-    axs[1].set_title('Matched Galacticus')
-    axs[1].set_xlabel('redshift')
-    axs[1].set_ylabel(clr)
-    h,xbins,ybins = np.histogram2d(gal_prop['redshift'],gal_prop[clr],bins=(xbins,ybins))
-    axs[2].pcolor(xbins,ybins,h.T,cmap='PuBu',norm=clr.LogNorm())
-    axs[2].grid()
-    axs[2].set_title('Galacticus ')
-    axs[2].set_xlabel('redshift')
-    axs[2].set_ylabel(clr)
-    
-
-def plot_gal_prop_dist(gal_props, gal_props_names):
-    num = len(gal_props)
-    num_list = range(0, num)
-    plt.figure()
-    bins = np.linspace(5,14,100)
-    for i in num_list:
-        h,xbins = np.histogram(gal_props[i]['m_star'], bins = bins, normed=True)
-        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
-    plt.grid()
-    plt.xlabel('m_star')
-    plt.ylabel('count')
-    plt.legend(loc='best', framealpha=0.3)
-
-    plt.figure()
-    bins = np.linspace(-25,-10, 100)
-    for i in num_list:
-        h,xbins = np.histogram(gal_props[i]['Mag_r'], bins = bins, normed=True)
-        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
-    plt.grid()
-    plt.xlabel('Mag_r')
-    plt.ylabel('count')
-    plt.legend(loc='best', framealpha=0.3)
-
-    plt.figure()
-    bins = np.linspace(-.5,3, 100)
-    for i in num_list:
-        h,xbins = np.histogram(gal_props[i]['clr_gr'], bins = bins, normed=True)
-        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
-    plt.grid()
-    plt.xlabel('clr_gr')
-    plt.ylabel('count')
-    plt.legend(loc='best', framealpha=0.3)
-
-    plt.figure()
-    bins = np.linspace(-.5,3, 100)
-    for i in num_list:
-        h,xbins = np.histogram(gal_props[i]['clr_ri'], bins = bins, normed=True)
-        plt.plot(dtk.bins_avg(xbins), h, label=gal_props_names[i])
-    plt.grid()
-    plt.xlabel('clr_ri')
-    plt.ylabel('count')
-    plt.legend(loc='best', framealpha=0.3)
-    
-    xbins, ybins = (np.linspace(-25,-10,250), np.linspace(-.5,2,250))
-    fig, axs = plt.subplots(1,num,figsize=(num*5,5), sharex = True)
-    for i in num_list:
-        h,xbins,ybins = np.histogram2d(gal_props[i]['Mag_r'], gal_props[i]['clr_gr'],bins=(xbins,ybins))
-        axs[i].pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
-        axs[i].grid()
-        axs[i].set_title(gal_props_names[i])
-        axs[i].set_xlabel('Mag_r')
-        axs[i].set_ylabel('clr_gr')
-
-    fig, axs = plt.subplots(1,num,figsize=(num*5,5), sharex = True)
-    for i in num_list:
-        h,xbins,ybins = np.histogram2d(gal_props[i]['Mag_r'], gal_props[i]['clr_ri'],bins=(xbins,ybins))
-        axs[i].pcolor(xbins, ybins, h.T, cmap='PuBu', norm=clr.LogNorm())
-        axs[i].grid()
-        axs[i].set_title(gal_props_names[i])
-        axs[i].set_xlabel('Mag_r')
-        axs[i].set_ylabel('clr_ri')
-    
 
 def lightcone_resample(param_file_name):
     t00 = time.time()
+    #################################    
     # Loading in all the parameters from the parameter file
+    #################################
     param = dtk.Param(param_file_name)
     lightcone_fname = param.get_string('lightcone_fname')
     gltcs_fname = param.get_string('gltcs_fname')
@@ -1951,7 +1625,7 @@ def lightcone_resample(param_file_name):
     red_sequence_transition_mass_end = red_sequence_transition_mass_end
 
 
-
+    # Check that the parameters are valid
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
     if healpix_file:
@@ -1960,16 +1634,21 @@ def lightcone_resample(param_file_name):
         assert ((healpix_shear_file is None) or healpix_shear_file == "NULL"), "If `fake_lensing` is set to true, healpix_shear_file must either not in the param file or set to NULL."
     if not cut_small_galaxies: # if we don't cut out small galaxies, set the mass limit
         cut_small_galaxies_mass = None # to None as a flag for other parts in the code
-    # Load Eve's galmatcher mask. Another script writes the mask to file (Need to check which one)
+        
+    # If saved: Load Eve's galmatcher mask. Else: run the script that makes the masks.
     if load_mask:
         hfile_mask = h5py.File(mask_loc,'r')
     else:
         selection1 = galmatcher.read_selections(yamlfile='galmatcher/yaml/vet_protoDC2.yaml')
         selection2 = galmatcher.read_selections(yamlfile='galmatcher/yaml/colors_protoDC2.yaml')
-    # This object converts simulation steps into redshift or scale factor
-    stepz = dtk.StepZ(sim_name='AlphaQ')
-    output_step_list = [] # A running list of the output genereated for each time step. 
-    # After all the steps run, the files are concatenated into one file. 
+        
+
+    stepz = dtk.StepZ(sim_name='AlphaQ')    # This object converts simulation steps into redshift or scale factor
+    output_step_list = [] # A running list of the output genereated for each time step.
+    
+    #################################
+    # After all the steps run, the files are concatenated into one file.
+    #################################
     step_size = steps.size
     for i in range(0,step_size-1):
         # Since the interpolation scheme needs to know the earlier and later time step
@@ -1982,26 +1661,30 @@ def lightcone_resample(param_file_name):
         print("\n\n=================================")
         print(" STEP: ",step)
         gltcs_step_fname = gltcs_fname.replace("${step}",str(step)) 
-        gltcs_slope_step_fname = gltcs_slope_fname.replace("${step}",str(step))
         lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
         output_step_loc = output_fname.replace("${step}",str(step))
         output_step_list.append(output_step_loc)
         sod_step_loc = sod_fname.replace("${step}",str(step))
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
+
+        # If we are concatenate_only mode, we don't generate any step data, but only concatenate
+        # all step files into the final file
         if concatenate_only or metadata_only: 
             print("Skipping: concatenate_only is true ")
             continue
 
+        # If this is a resuming run: skip steps that have already have been run and
+        # start producing new step files after resume_at_step
         if resume_run and step > resume_at_step :
             print("Skipping: we haven't reach the resume step: step {} > resume {}".format(step,resume_at_step))
             continue
-
         elif resume_run:
             print("resuming: step {} > resume {}".format(step,resume_at_step))
         else:
             print("not a resume run")
-   
+
+        # Either load the precomputed masks or recomputes them
         if load_mask:
             mask1 = hfile_mask['{}'.format(step)].value
             mask2 = hfile_mask['{}'.format(step2)].value
@@ -2013,14 +1696,19 @@ def lightcone_resample(param_file_name):
             mask_a = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection1)
             mask_b = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection2)
             mask2 = mask_a & mask_b
-        #The index remap galaxies in step2 to the same order as they were in step1
+            
+        # The index remap galaxies in step2 to the same order as they were in step1
         index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1'].value
+
+        # Print statement verbosity 
         verbose = True
+        
         # Healpix cutouts/files have the step saved inside of them.
         if healpix_file:
             internal_file_step = step
         else:
             internal_file_step = None
+            
         # Load the mock (UMachine + Color + Shear) into dict of arrays. 
         if not(healpix_file):
             lc_data = construct_lc_data(lightcone_step_fname, verbose = verbose, recolor=recolor, 
@@ -2037,6 +1725,8 @@ def lightcone_resample(param_file_name):
                                                 healpix_pixels = healpix_pixels,
                                                 red_sequence_transition_mass_start = red_sequence_transition_mass_start,
                                                 red_sequence_transition_mass_end = red_sequence_transition_mass_end)
+            
+        # Calculate redshift quantites
         print("using interpolation on step", step)
         lc_a = 1.0/(1.0 +lc_data['redshift'])
         lc_a_cc = np.copy(lc_a) # galaxy scale factor for copy columns function
@@ -2047,53 +1737,70 @@ def lightcone_resample(param_file_name):
         print("lightcone min a:       {}".format(step_a))
         print("lightcone max a        {}".format(step2_a))
         print("===================")
-
         abins = np.linspace(step_a, step2_a,substeps+1)
         abins_avg = dtk.bins_avg(abins)
+
+
+        # Arrays for match up values
         index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
         match_dust_factors = -np.ones(lc_data['redshift'].size,dtype='f4')
         match_luminosity_factors = -1*np.ones(lc_data['redshift'].size,dtype='f4')
         match_library_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
         match_node_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
 
-        # For each sub step in this step, interpolate the 
-        
+        #################################
+        # For each sub step in this step, interpolate the library to
+        # the sub step redshift
+        #################################
         for k in range(0,abins_avg.size):
+
+            # select the galaxies that belong in this sub step
+            slct_lc_abins1 = (abins[k]<=lc_a) # select everything 
+            slct_lc_abins2 = (lc_a<abins[k+1])
+            slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
+            lc_data_a = dic_select(lc_data, slct_lc_abin)
+            
             print("\t{}/{} substeps".format(k,abins_avg.size))
             print("\t\t {} -> {}".format(abins[k],abins[k+1]))
             print("\t\t center a: {}".format(abins_avg[k]))
             print("\t\t step a: {} -> {}".format(step_a, step2_a))
-            slct_lc_abins1 = (abins[k]<=lc_a) # select everything 
-            slct_lc_abins2 = (lc_a<abins[k+1])
-            slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
             print("\t\t num gals: {}".format(np.sum(slct_lc_abin)))
-            lc_data_a = dic_select(lc_data, slct_lc_abin)
+            
+            
+
             if lc_data_a['redshift'].size == 0:
                 print("\t\t\t no galaxies for this redshift bin")
                 continue #nothing to match for this redshift bin
+                # so skip the entire match process, and use the empty
+                # preallocated arrays. 
 
-            
+            # For each dust factor
             gal_prop_list = [] 
             for dust_factor in np.concatenate(([1.0],dust_factors)):
+                # Interpolate the library galaxy to the median redshift
+                # of the substep
                 print("\tdust_factor********=",dust_factor)
                 gal_prop_tmp2 = construct_gal_prop_redshift_dust_raw(
                     gltcs_fname, index_2to1, step, step2, step_a, step2_a, abins_avg[k],
                     mask1, mask2, dust_factor, match_obs_color_red_seq,
                     cut_small_galaxies_mass = cut_small_galaxies_mass)
                 gal_prop_list.append(gal_prop_tmp2)
-            gal_prop_a = cat_dics(gal_prop_list)
-            
-            # Find the closest Galacticus galaxy
+            gal_prop_a = cat_dics(gal_prop_list) # combine all dust factors into one dict
+
+            #################################
+            # Find the closest Galacticus galaxy to the light cone galaxy
+            #################################
             index_abin = resample_index(lc_data_a, gal_prop_a, 
                                         ignore_mstar = ignore_mstar, 
                                         verbose = verbose, 
                                         ignore_bright_luminosity=ignore_bright_luminosity, 
                                         ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
                                         ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
-            #If we are matching on observed colors for cluster red seqence guys:
+            
+            #If we are matching on observed colors for cluster red seqence galaxies:
             if match_obs_color_red_seq:
-                print("Matching on obs red seq")
                 #Create a lc_data with only cluster red sequence galaxies
+                print("Matching on obs red seq")
                 slct_clstr_red_squence = lc_data_a['is_cluster_red_sequence']
                 if np.sum(slct_clstr_red_squence) > 0:
                     lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_squence)
@@ -2110,21 +1817,27 @@ def lightcone_resample(param_file_name):
                     index_abin[slct_clstr_red_squence] = index_abin_crs
                 else:
                     print("\tno red squence galaxies, so skipping...")
-            # Get the Galacticus galaxy index, the division is to correctly
-            # offset the index for the extra dust gal_prop 
+                    
+            # Set the Galacticus library galaxy index
             index[slct_lc_abin] = gal_prop_a['index'][index_abin]
-            # = index_abin%(index_abin.size//(1+len(dust_factors)))
+
             # Record the dust factor for the matched galaxy so that it can be applied 
             # to other columns in copy_columns()
             match_dust_factors[slct_lc_abin] = gal_prop_a['dust_factor'][index_abin]
             match_library_index[slct_lc_abin] = gal_prop_a['index'][index_abin]
             match_node_index[slct_lc_abin] = gal_prop_a['node_index'][index_abin]
+
+            # If set true, set the light cone galaxy redshift to sub step median
+            # redshift instead of it own. This improves the quality of the match
+            # up especially if only one substep is used. 
             if use_substep_redshift:
                 lc_a_cc[slct_lc_abin] = abins_avg[k]
+                
             # By default use the same Galacticus luminosity
             match_luminosity_factors[slct_lc_abin] = 1.0
-            # For the brightest galaxies, adjust all luminosities by the same factor
-            # so that the r-band matches
+            
+            # For galaxies brighter than rescale_bright_luminosity_threashold,
+            # adjust all luminosities by the same factor so that the r-band matches
             if rescale_bright_luminosity:
                 slct_rescale_galaxies = lc_data_a['Mag_r'] < rescale_bright_luminosity_threshold
                 if np.sum(slct_rescale_galaxies) > 0:
@@ -2133,6 +1846,8 @@ def lightcone_resample(param_file_name):
                     slct_tmp = np.copy(slct_lc_abin)
                     slct_tmp[slct_lc_abin]=slct_rescale_galaxies
                     match_luminosity_factors[slct_tmp]=tmp
+
+            # Some plots to check the quality of the matchup
             if plot_substep:
                 plot_differences(lc_data_a, gal_prop_a, index_abin);
                 plot_differences_obs_color(lc_data_a, gal_prop_a, index_abin);
@@ -2144,12 +1859,16 @@ def lightcone_resample(param_file_name):
                 #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
                 plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);
                 plt.show()
+
+        # Make sure that everybody got a match
         slct_neg = index == -1
         print("assigned: {}/{}: {:.2f}".format( np.sum(~slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
         assert(np.sum(slct_neg) == 0)
             
 
+        # After assign a matching index
         if not(healpix_file):
+            # Copy properties from the library galaxy using interpolation into cosmoDC2
             copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
                                                 step, step2, step_a, step2_a, mask1, mask2, 
                                                 index_2to1, lc_a_cc, verbose = verbose,
@@ -2158,6 +1877,7 @@ def lightcone_resample(param_file_name):
                                                 luminosity_factors = match_luminosity_factors,
                                                 library_index = match_library_index,
                                                 node_index = match_node_index)
+            # Copy lightcone galaxy data into cosmoDC2
             overwrite_columns(lightcone_step_fname, output_step_loc, ignore_mstar = ignore_mstar,
                               verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
                               internal_step = internal_file_step, fake_lensing=fake_lensing, step = step,
@@ -2169,6 +1889,8 @@ def lightcone_resample(param_file_name):
             add_size_quantities(output_step_loc)
             add_ellipticity_quantities(output_step_loc)
         else:
+            # Copy properties from the library galaxy using interpolation into cosmoDC2
+            # but into individual healpix files
             copy_columns_interpolation_dust_raw_healpix(gltcs_fname, output_step_loc, index, 
                                                         step, step2, step_a, step2_a, mask1, mask2, 
                                                         index_2to1, lc_a_cc, 
@@ -2181,8 +1903,10 @@ def lightcone_resample(param_file_name):
                                                         node_index = match_node_index)
 
             for healpix_pixel in healpix_pixels:
+                # For each healpix pixel, 
                 output_healpix_loc = output_step_loc.replace("${healpix}",str(healpix_pixel))
                 lightcone_healpix_fname =lightcone_step_fname.replace("${healpix}", str(healpix_pixel))
+                # Copy lightcone galaxy data into cosmoDC2
                 overwrite_columns(lightcone_healpix_fname, output_healpix_loc, ignore_mstar = ignore_mstar,
                                   verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
                                   internal_step = internal_file_step, fake_lensing=fake_lensing, step = step, 
@@ -2209,15 +1933,6 @@ def lightcone_resample(param_file_name):
             index = np.arange(lc_data['redshift'].size)
             plt.figure()
             plt.title("Post match")
-            # plt.figure()
-            # plt.plot(lc_data['clr_gr'], new_gal_prop['clr_gr'], '.', alpha=0.3)
-            # plt.figure()
-            # plt.plot(lc_data['Mag_r'], new_gal_prop['Mag_r'], '.', alpha=0.3)
-            # plt.figure()
-            # plt.plot(lc_data['m_star'], new_gal_prop['m_star'], '.', alpha=0.3)
-            # plt.figure()
-            # plt.title(" org gal prop vs new gal prop")
-            # plt.plot(new_gal_prop['m_star'][index], new_gal_prop['m_star'],'.',alpha=0.3)
             mag_bins = (-21,-20,-19)
             plot_differences(lc_data, new_gal_prop, index)
             plot_differences_2d(lc_data, new_gal_prop, index)
@@ -2225,7 +1940,6 @@ def lightcone_resample(param_file_name):
             plot_mag_r(lc_data, new_gal_prop, index)
             plot_side_by_side(lc_data, new_gal_prop, index)
             plot_clr_mag(lc_data, new_gal_prop, index, mag_bins, 'clr_gr', 'g-r color')
-            #plot_clr_mag(lc_data, new_gal_prop, index, mag_bins, 'clr_ri', 'r-i color')
             plot_ri_gr_mag(lc_data, new_gal_prop, index, mag_bins)
         if plot or plot_substep:
             dtk.save_figs('figs/'+param_file_name+"/"+__file__+"/")
