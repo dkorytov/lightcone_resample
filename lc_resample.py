@@ -63,27 +63,11 @@ def cat_dics(dics, keys = None):
     return new_dic
 
 
-def select_dic(dic, slct):
+def dic_select(dic, slct):
     new_dic = {}
     for key in dic.keys():
-        new_dic[key]=dic[key][slct]
+        new_dic[key] = dic[key][slct]
     return new_dic
-
-
-def clean_up_gal_prop(gal_prop):
-    """For each galaxy, if any property is not finite, set all other
-    properties to some value (4) that will not be selected by the
-    kdtree query.
-
-    """
-    print("Cleaning up gal prop: ",end="")
-    slct_nfnt =  ~np.isfinite(gal_prop['m_star'])
-    for key in gal_prop.keys():
-        slct_nfnt = slct_nfnt | ~np.isfinite(gal_prop[key])
-        print("bad vals: ", np.sum(slct_nfnt))
-    for key in gal_prop.keys():
-        gal_prop[key][slct_nfnt] = -4
-    return gal_prop
 
 
 def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, step1_a, step2_a, target_a, mask1, mask2, 
@@ -349,20 +333,6 @@ def construct_lc_data_healpix(fname, match_obs_color_red_seq = False,
     return lc_data
 
 
-def dic_select(dic, slct):
-    new_dic = {}
-    for key in dic.keys():
-        new_dic[key] = dic[key][slct]
-    return new_dic
-
-
-def select_by_index(data,index):
-    new_data = {}
-    for key in data.keys():
-        new_data[key] = data[key][index]
-    return new_data
-
-
 def squash_magnitudes(mag_dic, lim, a):
     # I'm using a tanh function for the soft threshold. No magnitude will excessed 
     # 'lim'. Mags below lim-a aren't affect.  
@@ -599,20 +569,6 @@ def get_rs_scatter_dict_from_param(param):
     return rs_scatter_dict
     
 
-def modify_data_with_rs_scatter(data_dict, data_type, rs_scatter_dict):
-    data_dict = data_dict.copydeep()
-    assert data_type == "query" or data_type == "tree", "Data type must be either \"query\" or \"tree\". Given data_type is {}".format(data_type)
-    colors = ['gr', 'ri', 'iz']
-    for color in colors:
-        rs_scatter_key = 'rs_scatter_{}_{}'.format(data_type, color)
-        if rs_scatter_key in rs_scatter_dict:
-            data = query_dict["clr_{}_obs".format(color)]
-            scatter = np.random.normal(scale=rs_scatter_dict[key],
-                                       size =data.size)
-            query_dict["clr_{}_obs".format(color)] = data + scatter
-    return data_dict
-
-
 def modify_array_with_rs_scatter(data_dict, data_type, color, rs_scatter_dict):
     assert data_type == "query" or data_type == "tree", "Data type must be either \"query\" or \"tree\". Given data_type is {}".format(data_type)
     data = data_dict['clr_{}_obs'.format(color)]
@@ -629,7 +585,7 @@ def modify_array_with_rs_scatter(data_dict, data_type, color, rs_scatter_dict):
 copy_avoids = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift',
                'redshiftHubble','placementType','isCentral','hostIndex', 
                'blackHoleAccretionRate','blackHoleMass', 'step','infallHaloMass','infallHaloTag')
-#TODO re-allow nitrogen contamination
+
 copy_avoids_ptrn = ('hostHalo','magnitude','ageStatistics','Radius','Axis','Ellipticity','positionAngle','total', 'ContinuumLuminosity', 'contam_nitrogenII6584', 'Sersic', 'morphology', 'contam_nitrogen')
 no_slope_var = ('x','y','z','vx','vy','vz', 'peculiarVelocity','galaxyID','redshift','redshiftHubble','inclination','positionAngle')
 no_slope_ptrn  =('morphology','hostHalo','infall')
@@ -651,8 +607,6 @@ def to_copy(key, short, supershort):
 
 # Keys that have their luminosity adjusted
 luminosity_factors_keys = ['Luminosities', 'Luminosity']
-
-_cached_column = {}
 
 def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors, kdtree_index=None, 
                                       luminosity_factors = None, cache = False):
@@ -770,42 +724,6 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
     ##=======DEBUG======
     return val_out
 
-
-def get_func_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors=1.0, luminosity_factors = 1.0):
-    """Returns the constants required to reconstruct the column at any redshift between 
-    the interpolation steps. The return values are val0, slope0 and dust_effect0 for the
-    function val(z, dust) = (val0 + slope0*del_a)*(dust_effect0**dust_factor)
-    """
-    step_del_a = step2_a - step1_a
-    target_del_a = target_a - step1_a
-    # The masking all galaxies that fail galmatcher's requirements at
-    # step1, galaxies that don't have a descndent, or if the
-    # descendent galaxy at step2 doesn't pass galmatcher requirements.
-    mask_tot = mask1 & (index != -1) & mask2[index]
-    if ":dustAtlas" in key:
-        key_no_dust = key.replace(":dustAtlas","")
-        val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
-        val1_dust = h_in_gp1[key].value[mask_tot]
-        val2_no_dust = h_in_gp2[key].value[index][mask_tot]
-        dust_effect0 = val1_dust/val1_no_dust
-        val0 = val1_no_dust
-        slope0 = (val2_no_dust - val1_no_dust)/step_del_a
-        #val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_effect)
-    else:
-        val1_data = h_in_gp1[key].value[mask_tot]
-        val2_data = h_in_gp2[key].value[index][mask_tot]
-        slope0 = (val2_data - val1_data)/step_del_a
-        val0 = val1_data
-        dust_effect0 = np.ones(val0.size, dtype='f4')
-        #val_out = val1_data + slope*target_del_a
-    if(val0.dtype == np.float64):
-        val0 = val0.astype(np.float32)
-    if(slope0.dtype == np.float64):
-        slope0 = slope0.astype(np.float32)
-    if(dust_effect0.dtype == np.float64):
-        dust_effect0 = dust_effect0.astype(np.float32)
-    return val0, slope0, dust_effect0
-    
 
 def copy_columns_interpolation_dust_raw(input_fname, output_fname,
                                         kdtree_index, step1, step2,
@@ -1314,32 +1232,6 @@ def add_size_quantities(output_fname):
     hgroup['morphology/diskHalfLightRadiusArcsec'] = size_disk*f
 
 
-def erase_ellipticity_quantities(output_fname):
-    print(output_fname)
-    def erase_if_has(hfile, output_fname):
-        if 'galaxyProperties/'+output_fname in hfile:
-            del hfile['galaxyProperties/'+output_fname]
-    hfile = h5py.File(output_fname,'r+')
-    erase_if_has(hfile, 'morphology/spheroidAxisRatio')
-    erase_if_has(hfile, 'morphology/spheroidAxisRatio')
-    erase_if_has(hfile, 'morphology/spheroidMajorAxisArcsec')
-    erase_if_has(hfile, 'morphology/spheroidMinorAxisArcsec')
-    erase_if_has(hfile, 'morphology/spheroidEllipticity') 
-    erase_if_has(hfile, 'morphology/spheroidEllipticity1')
-    erase_if_has(hfile, 'morphology/spheroidEllipticity2')
-    erase_if_has(hfile, 'morphology/diskAxisRatio')
-    erase_if_has(hfile, 'morphology/diskMajorAxisArcsec') 
-    erase_if_has(hfile, 'morphology/diskMinorAxisArcsec') 
-    erase_if_has(hfile, 'morphology/diskEllipticity') 
-    erase_if_has(hfile, 'morphology/diskEllipticity1')
-    erase_if_has(hfile, 'morphology/diskEllipticity2')
-    erase_if_has(hfile, 'morphology/totalEllipticity')  
-    erase_if_has(hfile, 'morphology/totalAxisRatio')    
-    erase_if_has(hfile, 'morphology/totalEllipticity1') 
-    erase_if_has(hfile, 'morphology/totalEllipticity2') 
-    erase_if_has(hfile, 'morphology/positionAngle') 
-
-
 def add_ellipticity_quantities(output_fname, verbose = False):
     if verbose:
         print("\tadding ellipticity")
@@ -1642,7 +1534,6 @@ def add_units(out_fname):
         else:
             print("column", key, "was not assigned a unit :(")
             print("===================")
-            #raise;
 
 def plot_differences(lc_data, gal_prop, index):
     keys = ['Mag_r','clr_gr','clr_ri','m_star']
@@ -2053,13 +1944,14 @@ def lightcone_resample(param_file_name):
         metadata_only = param.get_bool('metadata_only')
     else:
         metadata_only = False
+        
     # Adding scatter to the red squence
     rs_scatter_dict = get_rs_scatter_dict_from_param(param)
     red_sequence_transition_mass_start = red_sequence_transition_mass_start,
     red_sequence_transition_mass_end = red_sequence_transition_mass_end
 
 
-    # The other options are depricated
+
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
     if healpix_file:
@@ -2145,127 +2037,116 @@ def lightcone_resample(param_file_name):
                                                 healpix_pixels = healpix_pixels,
                                                 red_sequence_transition_mass_start = red_sequence_transition_mass_start,
                                                 red_sequence_transition_mass_end = red_sequence_transition_mass_end)
-        #There is no other option. I just don't want to re-indent this entire block of code--
-        #emacs doesn't re-indent python code well
-        if(use_slope): 
-            print("using interpolation on step", step)
-            lc_a = 1.0/(1.0 +lc_data['redshift'])
-            lc_a_cc = np.copy(lc_a) # galaxy scale factor for copy columns
-            del_lc_a =  np.max(lc_a) - np.min(lc_a)
-            step_a = np.min(lc_a)-0.01*del_lc_a #so no galaxy is exactly on the egdge of the bins
-            step2_a = np.max(lc_a)+0.01*del_lc_a
-            print('=======')
-            print("lightcone min a:       {}".format(step_a))
-            # print("lc raw min a:   {}".format(np.min(lc_a)))
-            # print("dtk step min a: {}".format(stepz.get_a(step)))
-            # print("gltcs        a: {}".format(1.0/(2.0180+1.0)) )  
-            # print('=======')
-            print("lightcone max a        {}".format(step2_a))
-            # print("lc raw max a:   {}".format(np.max(lc_a)))
-            # print("dtk step max a: {}".format(stepz.get_a(step2)))
-            # print("gltcs        a: {}".format(1.0/(1.9472+1.0)))
-            print("===================")
+        print("using interpolation on step", step)
+        lc_a = 1.0/(1.0 +lc_data['redshift'])
+        lc_a_cc = np.copy(lc_a) # galaxy scale factor for copy columns function
+        del_lc_a =  np.max(lc_a) - np.min(lc_a)
+        step_a = np.min(lc_a)-0.01*del_lc_a #so no galaxy is exactly on the egdge of the bins
+        step2_a = np.max(lc_a)+0.01*del_lc_a
+        print('=======')
+        print("lightcone min a:       {}".format(step_a))
+        print("lightcone max a        {}".format(step2_a))
+        print("===================")
 
-            abins = np.linspace(step_a, step2_a,substeps+1)
-            abins_avg = dtk.bins_avg(abins)
-            index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
-            match_dust_factors = -np.ones(lc_data['redshift'].size,dtype='f4')
-            match_luminosity_factors = -1*np.ones(lc_data['redshift'].size,dtype='f4')
-            match_library_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
-            match_node_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
-            for k in range(0,abins_avg.size):
-                print("\t{}/{} substeps".format(k,abins_avg.size))
-                slct_lc_abins1 = (abins[k]<=lc_a) 
-                slct_lc_abins2 = (lc_a<abins[k+1])
-                print("\t\t {} -> {}".format(abins[k],abins[k+1]))
-                print("\t\t center a: {}".format(abins_avg[k]))
-                print("\t\t step a: {} -> {}".format(step_a, step2_a))
-                slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
-                print("\t\t num gals: {}".format(np.sum(slct_lc_abin)))
-                lc_data_a = dic_select(lc_data, slct_lc_abin)
-                if lc_data_a['redshift'].size == 0:
-                    print("\t\t\t no galaxies for this redshift bin")
-                    continue #nothing to match for this redshift bin
-                if use_dust_factor:
-                    gal_prop_list = [] 
-                    for dust_factor in np.concatenate(([1.0],dust_factors)):
-                        print("\tdust_factor********=",dust_factor)
-                        # gal_prop_tmp,_ = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
-                        #                                                          step_a, abins_avg[k],
-                        #                                                          verbose = verbose,
-                        #                                                          mask = mask1,
-                        #                                                          dust_factor=dust_factor)
-                        gal_prop_tmp2 = construct_gal_prop_redshift_dust_raw(
-                            gltcs_fname, index_2to1, step, step2, step_a, step2_a, abins_avg[k],
-                            mask1, mask2, dust_factor, match_obs_color_red_seq,
-                            cut_small_galaxies_mass = cut_small_galaxies_mass)
-                        gal_prop_list.append(gal_prop_tmp2)
-                    gal_prop_a = cat_dics(gal_prop_list)
-                # Find the closest Galacticus galaxy
-                index_abin = resample_index(lc_data_a, gal_prop_a, 
-                                            ignore_mstar = ignore_mstar, 
-                                            verbose = verbose, 
-                                            ignore_bright_luminosity=ignore_bright_luminosity, 
-                                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
-                                            ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
-                #If we are matching on observed colors for cluster red seqence guys:
-                if match_obs_color_red_seq:
-                    print("Matching on obs red seq")
-                    #Create a lc_data with only cluster red sequence galaxies
-                    slct_clstr_red_squence = lc_data_a['is_cluster_red_sequence']
-                    if np.sum(slct_clstr_red_squence) > 0:
-                        lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_squence)
-                        # Find the closest Galacticus galaxy as before but also match on 
-                        # observed g-r, r-i, and i-z colors
-                        index_abin_crs = resample_index_cluster_red_squence(
-                            lc_data_a_crs, gal_prop_a, 
-                            ignore_mstar = ignore_mstar,
-                            verbose = verbose,
-                            ignore_bright_luminosity=ignore_bright_luminosity,
-                            ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
-                            ignore_bright_luminosity_softness = ignore_bright_luminosity_softness,
-                            rs_scatter_dict = rs_scatter_dict)
-                        index_abin[slct_clstr_red_squence] = index_abin_crs
-                    else:
-                        print("\tno red squence galaxies, so skipping...")
-                if use_dust_factor:
-                    # Get the Galacticus galaxy index, the division is to correctly
-                    # offset the index for the extra dust gal_prop 
-                    index[slct_lc_abin] = gal_prop_a['index'][index_abin]
-                    # = index_abin%(index_abin.size//(1+len(dust_factors)))
-                    # Record the dust factor for the matched galaxy so that it can be applied 
-                    # to other columns in copy_columns()
-                    match_dust_factors[slct_lc_abin] = gal_prop_a['dust_factor'][index_abin]
-                    match_library_index[slct_lc_abin] = gal_prop_a['index'][index_abin]
-                    match_node_index[slct_lc_abin] = gal_prop_a['node_index'][index_abin]
-                    if use_substep_redshift:
-                        lc_a_cc[slct_lc_abin] = abins_avg[k]
-                # By default use the same Galacticus luminosity
-                match_luminosity_factors[slct_lc_abin] = 1.0
-                # For the brightest galaxies, adjust all luminosities by the same factor
-                # so that the r-band matches
-                if rescale_bright_luminosity:
-                    slct_rescale_galaxies = lc_data_a['Mag_r'] < rescale_bright_luminosity_threshold
-                    if np.sum(slct_rescale_galaxies) > 0:
-                        print("num bright galaxies to rescale luminosity: {}".format(np.sum(slct_rescale_galaxies)))
-                        tmp = 10**((-lc_data_a['Mag_r'][slct_rescale_galaxies] + gal_prop_a['Mag_r'][index_abin][slct_rescale_galaxies])/2.5)
-                        slct_tmp = np.copy(slct_lc_abin)
-                        slct_tmp[slct_lc_abin]=slct_rescale_galaxies
-                        match_luminosity_factors[slct_tmp]=tmp
-                if plot_substep:
-                    plot_differences(lc_data_a, gal_prop_a, index_abin);
-                    plot_differences_obs_color(lc_data_a, gal_prop_a, index_abin);
-                    plot_differences_2d(lc_data_a, gal_prop_a, index_abin);
-                    plot_side_by_side(lc_data_a, gal_prop_a, index_abin);
-                    mag_bins = (-21,-20,-19);
-                    plot_mag_r(lc_data_a, gal_prop_a, index_abin);
-                    plot_clr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color');
-                    #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
-                    plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);
-                    plt.show()
-            slct_neg = index == -1
-            print("assigned: {}/{}: {:.2f}".format( np.sum(~slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
-            assert(np.sum(slct_neg) == 0)
+        abins = np.linspace(step_a, step2_a,substeps+1)
+        abins_avg = dtk.bins_avg(abins)
+        index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
+        match_dust_factors = -np.ones(lc_data['redshift'].size,dtype='f4')
+        match_luminosity_factors = -1*np.ones(lc_data['redshift'].size,dtype='f4')
+        match_library_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
+        match_node_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
+
+        # For each sub step in this step, interpolate the 
+        
+        for k in range(0,abins_avg.size):
+            print("\t{}/{} substeps".format(k,abins_avg.size))
+            print("\t\t {} -> {}".format(abins[k],abins[k+1]))
+            print("\t\t center a: {}".format(abins_avg[k]))
+            print("\t\t step a: {} -> {}".format(step_a, step2_a))
+            slct_lc_abins1 = (abins[k]<=lc_a) # select everything 
+            slct_lc_abins2 = (lc_a<abins[k+1])
+            slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
+            print("\t\t num gals: {}".format(np.sum(slct_lc_abin)))
+            lc_data_a = dic_select(lc_data, slct_lc_abin)
+            if lc_data_a['redshift'].size == 0:
+                print("\t\t\t no galaxies for this redshift bin")
+                continue #nothing to match for this redshift bin
+
+            
+            gal_prop_list = [] 
+            for dust_factor in np.concatenate(([1.0],dust_factors)):
+                print("\tdust_factor********=",dust_factor)
+                gal_prop_tmp2 = construct_gal_prop_redshift_dust_raw(
+                    gltcs_fname, index_2to1, step, step2, step_a, step2_a, abins_avg[k],
+                    mask1, mask2, dust_factor, match_obs_color_red_seq,
+                    cut_small_galaxies_mass = cut_small_galaxies_mass)
+                gal_prop_list.append(gal_prop_tmp2)
+            gal_prop_a = cat_dics(gal_prop_list)
+            
+            # Find the closest Galacticus galaxy
+            index_abin = resample_index(lc_data_a, gal_prop_a, 
+                                        ignore_mstar = ignore_mstar, 
+                                        verbose = verbose, 
+                                        ignore_bright_luminosity=ignore_bright_luminosity, 
+                                        ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
+                                        ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
+            #If we are matching on observed colors for cluster red seqence guys:
+            if match_obs_color_red_seq:
+                print("Matching on obs red seq")
+                #Create a lc_data with only cluster red sequence galaxies
+                slct_clstr_red_squence = lc_data_a['is_cluster_red_sequence']
+                if np.sum(slct_clstr_red_squence) > 0:
+                    lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_squence)
+                    # Find the closest Galacticus galaxy as before but also match on 
+                    # observed g-r, r-i, and i-z colors
+                    index_abin_crs = resample_index_cluster_red_squence(
+                        lc_data_a_crs, gal_prop_a, 
+                        ignore_mstar = ignore_mstar,
+                        verbose = verbose,
+                        ignore_bright_luminosity=ignore_bright_luminosity,
+                        ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
+                        ignore_bright_luminosity_softness = ignore_bright_luminosity_softness,
+                        rs_scatter_dict = rs_scatter_dict)
+                    index_abin[slct_clstr_red_squence] = index_abin_crs
+                else:
+                    print("\tno red squence galaxies, so skipping...")
+            # Get the Galacticus galaxy index, the division is to correctly
+            # offset the index for the extra dust gal_prop 
+            index[slct_lc_abin] = gal_prop_a['index'][index_abin]
+            # = index_abin%(index_abin.size//(1+len(dust_factors)))
+            # Record the dust factor for the matched galaxy so that it can be applied 
+            # to other columns in copy_columns()
+            match_dust_factors[slct_lc_abin] = gal_prop_a['dust_factor'][index_abin]
+            match_library_index[slct_lc_abin] = gal_prop_a['index'][index_abin]
+            match_node_index[slct_lc_abin] = gal_prop_a['node_index'][index_abin]
+            if use_substep_redshift:
+                lc_a_cc[slct_lc_abin] = abins_avg[k]
+            # By default use the same Galacticus luminosity
+            match_luminosity_factors[slct_lc_abin] = 1.0
+            # For the brightest galaxies, adjust all luminosities by the same factor
+            # so that the r-band matches
+            if rescale_bright_luminosity:
+                slct_rescale_galaxies = lc_data_a['Mag_r'] < rescale_bright_luminosity_threshold
+                if np.sum(slct_rescale_galaxies) > 0:
+                    print("num bright galaxies to rescale luminosity: {}".format(np.sum(slct_rescale_galaxies)))
+                    tmp = 10**((-lc_data_a['Mag_r'][slct_rescale_galaxies] + gal_prop_a['Mag_r'][index_abin][slct_rescale_galaxies])/2.5)
+                    slct_tmp = np.copy(slct_lc_abin)
+                    slct_tmp[slct_lc_abin]=slct_rescale_galaxies
+                    match_luminosity_factors[slct_tmp]=tmp
+            if plot_substep:
+                plot_differences(lc_data_a, gal_prop_a, index_abin);
+                plot_differences_obs_color(lc_data_a, gal_prop_a, index_abin);
+                plot_differences_2d(lc_data_a, gal_prop_a, index_abin);
+                plot_side_by_side(lc_data_a, gal_prop_a, index_abin);
+                mag_bins = (-21,-20,-19);
+                plot_mag_r(lc_data_a, gal_prop_a, index_abin);
+                plot_clr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins, 'clr_gr', 'g-r color');
+                #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
+                plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);
+                plt.show()
+        slct_neg = index == -1
+        print("assigned: {}/{}: {:.2f}".format( np.sum(~slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
+        assert(np.sum(slct_neg) == 0)
             
 
         if not(healpix_file):
@@ -2319,12 +2200,11 @@ def lightcone_resample(param_file_name):
         if plot:
             if healpix_file:
                 output_step_tmp = output_step_loc.replace("${healpix}", str(healpix_pixels[-1]))
-                lc_data = select_dic(lc_data, lc_data['healpix_pixel']==healpix_pixels[-1])
+                lc_data = dic_select(lc_data, lc_data['healpix_pixel']==healpix_pixels[-1])
             else:
                 output_step_tmp = output_step_loc 
 
             dummy_mask = np.ones(lc_data['redshift'].size,dtype=bool)
-            #new_gal_prop,new_mask = construct_gal_prop(output_step_loc, verbose=verbose,mask=dummy_mask)
             new_gal_prop,new_mask = construct_gal_prop(output_step_tmp, verbose=verbose,mask=dummy_mask)
             index = np.arange(lc_data['redshift'].size)
             plt.figure()
