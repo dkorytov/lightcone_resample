@@ -45,25 +45,14 @@ def get_norm(vals):
     return clr.Normalize(vmin=-val_max, vmax=val_max)
 
 
-def plot_color_z(fname,healpix_pixels,title, filter_type, frame, mag1, mag2,
-                 central_cut=False, Mr_cut=None, mr_cut = None, mass_cut=None, rs_cut=False,
-                 plot_type=None, scatter_color=None,synthetic=None, ms_cut =None, figsize = None):
-    # hgroup = h5py.File(fname,'r')['galaxyProperties']
-    # redshift = hgroup['redshift'].value
-    # host_mass = hgroup['hostHaloMass'].value
-    # mag1_val = hgroup[mag_trans[mag1].replace('${filter_type}',filter_type)].value
-    # mag2_val = hgroup[mag_trans[mag2].replace('${filter_type}',filter_type)].value
+def get_selection(fname, healpix_pixels, title, central_cut=False, 
+                  Mr_cut=None, mr_cut = None, 
+                  mass_cut=None, rs_cut=False,
+                  synthetic=None, ms_cut =None, 
+                  synthetic_type = None):
     hfiles = get_hfiles(fname, healpix_pixels)
     redshift = get_val(hfiles,'redshift')
-    #redshift = get_val(hfiles,'UMachineNative/target_halo_redshift')
-    # mag1_val = get_val(hfiles, Mag_trans[mag1].replace('${filter_type}',filter_type))
-    # mag2_val = get_val(hfiles, Mag_trans[mag2].replace('${filter_type}',filter_type))
-    mag1_val = get_mag(hfiles, filter_type,frame,mag1)
-    mag2_val = get_mag(hfiles, filter_type,frame,mag2)
-    clr_mag = mag1_val - mag2_val
-    ybins = np.linspace(-0.5,2,250)
-    xbins = np.linspace(0,1,250)
-    slct = (mag1_val == mag1_val)
+    slct = (redshift == redshift)
     if central_cut:
         central = get_val(hfiles, 'isCentral')
         slct = slct & (central == 1)
@@ -103,10 +92,35 @@ def plot_color_z(fname,healpix_pixels,title, filter_type, frame, mag1, mag2,
         lc_id = get_val(hfiles,'baseDC2/lightcone_id')
         slct = slct & ((lc_id < 0) == synthetic)
         title = title +'Synth.'
+    if synthetic_type is not None:
+        halo_id = get_val(hfiles,'baseDC2/halo_id')
+        slct = slct & (halo_id == synthetic_type)
+        title = title +'halo_id == {}, '.format(synthetic_type) 
+
     if ms_cut is not None:
         stellar_mass = get_val(hfiles,'totalMassStellar')
         slct = slct & ( stellar_mass > ms_cut)
         title = title + "M* > {:.2e}".format(ms_cut)
+    return slct, title
+    
+
+def plot_color_z(fname, healpix_pixels, slct, title, filter_type, frame, mag1, mag2,
+                 plot_type=None, scatter_color=None,  figsize = None):
+    # hgroup = h5py.File(fname,'r')['galaxyProperties']
+    # redshift = hgroup['redshift'].value
+    # host_mass = hgroup['hostHaloMass'].value
+    # mag1_val = hgroup[mag_trans[mag1].replace('${filter_type}',filter_type)].value
+    # mag2_val = hgroup[mag_trans[mag2].replace('${filter_type}',filter_type)].value
+    hfiles = get_hfiles(fname, healpix_pixels)
+    redshift = get_val(hfiles,'redshift')
+    #redshift = get_val(hfiles,'UMachineNative/target_halo_redshift')
+    # mag1_val = get_val(hfiles, Mag_trans[mag1].replace('${filter_type}',filter_type))
+    # mag2_val = get_val(hfiles, Mag_trans[mag2].replace('${filter_type}',filter_type))
+    mag1_val = get_mag(hfiles, filter_type,frame,mag1)
+    mag2_val = get_mag(hfiles, filter_type,frame,mag2)
+    clr_mag = mag1_val - mag2_val
+    ybins = np.linspace(-0.5,2,250)
+    xbins = np.linspace(0,1,250)
     print("color_z num: ", np.sum(slct))
 
     if figsize is None:
@@ -536,72 +550,16 @@ def plot_ellipticity_z(fname,healpix_pixels,title,
     plt.tight_layout()
     
 
-def plot_size_z(fname,healpix_pixels,title, 
-                synthetic_cut = False,
-                central_cut=False, Mr_cut=None, mr_cut = None, mass_cut=None, rs_cut=False,
-                plot_type=None, scatter_color=None,synthetic=None, ms_cut =None,
-                mi_cut = None):
+def plot_size_z(fname,healpix_pixels,slct, title,
+                plot_type=None):
     # hgroup = h5py.File(fname,'r')['galaxyProperties']
     # redshift = hgroup['redshift'].value
     # host_mass = hgroup['hostHaloMass'].value
     # mag1_val = hgroup[mag_trans[mag1].replace('${filter_type}',filter_type)].value
     # mag2_val = hgroup[mag_trans[mag2].replace('${filter_type}',filter_type)].value
     hfiles = get_hfiles(fname, healpix_pixels)
-    redshift = get_val(hfiles,'redshift')
-    # mag1_val = get_val(hfiles, Mag_trans[mag1].replace('${filter_type}',filter_type))
-    # mag2_val = get_val(hfiles, Mag_trans[mag2].replace('${filter_type}',filter_type))
-    slct = (redshift == redshift)
-    if central_cut:
-        central = get_val(hfiles, 'isCentral')
-        slct = slct & (central == 1)
-        title=title+', central galaxies'
-    title=title+'\n'
-    if synthetic_cut:
-        halo_id = get_val(hfiles, "baseDC2/halo_id")
-        print(halo_id)
-        slct = slct & (halo_id==-20)
-    if mass_cut is not None:
-        host_mass = get_val(hfiles, 'hostHaloMass')
-        if isinstance(mass_cut, (list,)):
-            slct = slct & (mass_cut[0] < host_mass) & (host_mass < mass_cut[1])
-            title = title+'{:.0e} <  M_halo < {:.0e}'.format(mass_cut[0],mass_cut[1])
-        else:
-            slct = slct & (mass_cut < host_mass)
-            title = title+'M_halo > {:.0e}'.format(mass_cut)
-    if Mr_cut is not None:
-        Mr = get_mag(hfiles, 'SDSS', 'rest', 'r')
-        if isinstance(Mr_cut, (list,)):
-            slct = slct & (Mr_cut[0] < Mr) & (Mr < Mr_cut[1])
-            title = title+'  {:.1f} < Mr < {:.1f}'.format(Mr_cut[0],Mr_cut[1])
-        else:
-            slct = slct & (Mr < Mr_cut)
-            title = title+'  Mr < {:.1f}'.format(Mr_cut)
-    if mr_cut is not None:
-        mr = get_mag(hfiles, 'SDSS', 'obs', 'r')
-        if isinstance(mr_cut, (list,)):
-            slct = slct & (mr_cut[0] < mr) & (mr < mr_cut[1])
-            title = title+'  {:.1f} < mr < {:.1f}'.format(mr_cut[0],mr_cut[1])
-        else:
-            slct = slct & (mr < mr_cut)
-            title = title+'  mr < {:.1f}'.format(mr_cut)
-    if mi_cut is not None:
-        mi = get_mag(hfiles, 'SDSS', 'obs','i')
-        slct = slct & (mi < mi_cut)
-        title = title+' m_i < {:.1f}'.format(mi_cut)
-    if rs_cut:
-        a = get_val(hfiles,'UMachineNative/is_on_red_sequence_gr')
-        b = get_val(hfiles,'UMachineNative/is_on_red_sequence_ri')
-        print(a)
-        slct = slct & (a & b)
-        title = title+', Red Seq.'
-    if synthetic is not None:
-        lc_id = get_val(hfiles,'UMachineNative/lightcone_id')
-        slct = slct & ((lc_id < 0) == synthetic)
-        title = title +'Synth.'
-    if ms_cut is not None:
-        stellar_mass = get_val(hfiles,'totalMassStellar')
-        slct = slct & ( stellar_mass > ms_cut)
-
+    #redshift = get_val(hfiles, 'redshift')
+    redshift = get_val(hfiles, 'baseDC2/redshift')
     print(slct.size, np.sum(slct), np.sum(slct)/slct.size)
     mag_r = get_mag(hfiles, "LSST", "rest", "r")
     shlr = get_val(hfiles,  "morphology/spheroidHalfLightRadius")
@@ -615,6 +573,12 @@ def plot_size_z(fname,healpix_pixels,title,
     shlr_ac = get_val(hfiles,  "morphology/spheroidHalfLightRadiusArcsec")[slct]
     dhlr_ac = get_val(hfiles,  "morphology/spheroidHalfLightRadiusArcsec")[slct]
     mhlr_ac = np.maximum(shlr_ac, dhlr_ac)
+
+    plt.figure()
+    h,xbins,ybins = np.histogram2d(redshift[slct], mag_r[slct],bins=100)
+    plt.pcolor(xbins, ybins, h.T, cmap='Blues', norm=clr.LogNorm())
+    plt.xlabel('z')
+    plt.ylabel('Mag r')
 
     plt.figure()
     h,xbins,ybins = np.histogram2d(redshift[slct], mag_r[slct],bins=100)
@@ -786,22 +750,37 @@ def plot_ra_dec(fname, healpix_pixels, title,
     plt.title(title)
     plt.tight_layout()
 
+
+def plot_redshift_distance(fname, healpix_pixels, slct, title):
+    hfiles = get_hfiles(fname, healpix_pixels)
+    x = get_val(hfiles, "x")[slct]
+    y = get_val(hfiles, "y")[slct]
+    z = get_val(hfiles, "z")[slct]
+    r = np.sqrt(x**2 + y**2 + z**2)
+    redshift = get_val(hfiles, 'redshift')[slct]
+    redshift_h = get_val(hfiles, 'redshiftHubble')[slct]
+    plt.figure()
+    plt.plot(redshift, r, ',')
+    plt.figure()
+    plt.plot(redshift_h, r, ',')
+    
+
 if __name__ == "__main__":
     title = sys.argv[1]
     fname = sys.argv[2]
     healpix_pixels = sys.argv[3:]
 
-    plot_ra_dec(fname, healpix_pixels, title, step_cut = 487, mr_cut = 29)
-    plot_ra_dec(fname, healpix_pixels, title, step_cut = 475, mr_cut = 29)
-    plot_ra_dec(fname, healpix_pixels, title, step_cut = 464, mr_cut = 29)
-    plot_ra_dec(fname, healpix_pixels, title, step_cut = 401, mr_cut = 29)
-    plot_ra_dec(fname, healpix_pixels, title, step_cut = 315, mr_cut = 29)
-    plot_ra_dec(fname, healpix_pixels, title, step_cut = 253, mr_cut = 29)
+    #plot_ra_dec(fname, healpix_pixels, title, step_cut = 487, mr_cut = 29)
+    # plot_ra_dec(fname, healpix_pixels, title, step_cut = 475, mr_cut = 29)
+    # plot_ra_dec(fname, healpix_pixels, title, step_cut = 464, mr_cut = 29)
+    # plot_ra_dec(fname, healpix_pixels, title, step_cut = 401, mr_cut = 29)
+    plot_ra_dec(fname, healpix_pixels, title, step_cut = 315)
+    # plot_ra_dec(fname, healpix_pixels, title, step_cut = 253, mr_cut = 29)
 
 
 
-    plt.show()
-    exit()
+    # plt.show()
+    # exit()
     print("healpix_pixels: ", healpix_pixels)
     mass_cut = None
     central_cut = None
@@ -819,7 +798,9 @@ if __name__ == "__main__":
     frame = 'obs'
     mag1 = 'g'
     mag2 = 'r'
-    plot_size_z(fname, healpix_pixels, title, synthetic_cut=True)
+    slct, title_slct = get_selection(fname, healpix_pixels, title, synthetic=True)
+    plot_size_z(fname, healpix_pixels, slct, title_slct)
+    plot_redshift_distance(fname, healpix_pixels, slct, title_slct)
     # plot_color_mass(fname,healpix_pixels, title,filter_type, frame, mag1, mag2, [0,1], mass_cut=mass_cut, central_cut=central_cut, rs_cut=rs_cut,plot_type='hist',Mr_cut=Mr_cut,scatter_color=scatter_color)
     # plot_color_z(fname,healpix_pixels, title,filter_type, frame, mag1, mag2, mass_cut=mass_cut, central_cut=central_cut, rs_cut=rs_cut,plot_type='hist',Mr_cut=Mr_cut,scatter_color=scatter_color, figsize=figsize)
     # mag1 = 'r'
@@ -895,16 +876,17 @@ if __name__ == "__main__":
 
     #################################
     # Basic observed colors
-    mr_cut = None
+    # mr_cut = None
 
     frame = 'rest'
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'g', 'r', plot_type='hist', ms_cut = 1e9)
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', ms_cut = 1e9)
-    rs_cut = True
-    mass_cut = 1e13
-    frame = 'rest'
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'g', 'r', plot_type='hist')
-    plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist')
+    slct, _ = get_selection(fname, healpix_pixels, title)
+    plot_color_z(fname, healpix_pixels, slct, title, 'model', frame, 'g', 'r', plot_type='hist')
+    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist', ms_cut = 1e9)
+    # rs_cut = True
+    # mass_cut = 1e13
+    # frame = 'rest'
+    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'g', 'r', plot_type='hist')
+    # plot_color_z(fname, healpix_pixels, title, 'model', frame, 'r', 'i', plot_type='hist')
 
     # frame = 'rest'
     # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
@@ -913,8 +895,9 @@ if __name__ == "__main__":
     # plot_color_z(fname, healpix_pixels, title, 'SDSS', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
     # plot_color_z(fname, healpix_pixels, title, 'SDSS', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
 
-    # frame = 'obs'
-    # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'g', 'r', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
+    frame = 'obs'
+    slct, _ = get_selection(fname, healpix_pixels, title)
+    plot_color_z(fname, healpix_pixels, slct, title, 'LSST', frame, 'g', 'r', plot_type='hist')
     # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'r', 'i', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
     # plot_color_z(fname, healpix_pixels, title, 'LSST', frame, 'i', 'z', plot_type='hist', mr_cut = mr_cut, rs_cut=rs_cut, mass_cut = mass_cut)
 
