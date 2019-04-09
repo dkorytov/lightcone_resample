@@ -57,6 +57,7 @@ def get_av_vals(hfiles, component, band, dust):
     data = get_val(hfiles, 'otherLuminosities/'+component+'LuminositiesStellar:'+band+':rest'+dust)
     return np.log10(data)*-2.5
 
+
 def print_Av_Rv(hfiles, component, slct):
     v_dust = get_av_vals(hfiles, component,"V", ":dustAtlas")[slct]
     v = get_av_vals(hfiles, component, "V", "")[slct]
@@ -71,6 +72,7 @@ def print_Av_Rv(hfiles, component, slct):
     print(component, "Av    ", Av)
     print(component, "Rv    ", Rv)
 
+
 if __name__ == "__main__":
     fname = sys.argv[1]
     healpix_pixels = sys.argv[2:]
@@ -78,11 +80,12 @@ if __name__ == "__main__":
     print("71.02876567618159 -25.70934849853007 22.1763157")
     print('id :', 10241431378047)
     print("we are trying to find the above")
-    
-    ra_target = 71.02876567618159
-    dec_target = -25.70934849853007
-    id_target = 10241431378047
-    id_target_guess = 10241431378
+
+    # Strange Rv/Av galaxy
+    # ra_target = 71.02876567618159
+    # dec_target = -25.70934849853007
+    # id_target = 10241431378047
+    # id_target_guess = 10241431378
     z_target = 0.32086
     hfiles = get_hfiles(fname, healpix_pixels)
     ra = get_val(hfiles, 'ra')
