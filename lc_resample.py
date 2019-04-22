@@ -29,7 +29,8 @@ from ellipticity_model import monte_carlo_ellipticity_bulge_disk
 from halotools.utils import fuzzy_digitize
 import galmatcher 
 
-def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut = False):
+def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut =
+                       False):
     t1 = time.time()
     gal_prop = {}
     hfile = h5py.File(fname,'r')
@@ -86,10 +87,13 @@ def clean_up_gal_prop(gal_prop):
     return gal_prop
 
 
-def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2, step1_a, step2_a, target_a, mask1, mask2, 
-                                         dust_factor = 1.0, 
-                                         match_obs_color_red_seq = False, 
-                                         cut_small_galaxies_mass = None):
+def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2,
+                                         step1_a, step2_a, target_a,
+                                         mask1, mask2, dust_factor =
+                                         1.0, match_obs_color_red_seq
+                                         = False,
+                                         cut_small_galaxies_mass =
+                                         None):
     """Constructs gal_prop using the interpolation scheme from the galacticus
     snapshots and index matching galaxies in step2 to galaxies in step1. 
     """
@@ -393,8 +397,8 @@ def squash_magnitudes(mag_dic, lim, a):
     return mag_dic
 
 
-def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = False,
-                   ignore_bright_luminosity=False,
+def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10,
+                   verbose = False, ignore_bright_luminosity=False,
                    ignore_bright_luminosity_threshold=None,
                    ignore_bright_luminosity_softness=0.0, ):
     if verbose:
@@ -478,8 +482,9 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10, verbose = 
     return index
    
 
-def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar = False, nnk = 10, 
-                                       verbose = False,
+def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar
+                                       = False, nnk = 10, verbose =
+                                       False,
                                        ignore_bright_luminosity=False,
                                        ignore_bright_luminosity_threshold=False,
                                        ignore_bright_luminosity_softness=0.0,
@@ -613,7 +618,8 @@ def modify_data_with_rs_scatter(data_dict, data_type, rs_scatter_dict):
     return data_dict
 
 
-def modify_array_with_rs_scatter(data_dict, data_type, color, rs_scatter_dict):
+def modify_array_with_rs_scatter(data_dict, data_type, color,
+                                 rs_scatter_dict):
     assert data_type == "query" or data_type == "tree", "Data type must be either \"query\" or \"tree\". Given data_type is {}".format(data_type)
     data = data_dict['clr_{}_obs'.format(color)]
     rs_scatter_key = "red_sequence_scatter_{}_{}".format(data_type, color)
@@ -654,8 +660,12 @@ luminosity_factors_keys = ['Luminosities', 'Luminosity']
 
 _cached_column = {}
 
-def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors, kdtree_index=None, 
-                                      luminosity_factors = None, cache = False):
+def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index,
+                                      mask1, mask2, step1_a, step2_a,
+                                      target_a, dust_factors,
+                                      kdtree_index=None,
+                                      luminosity_factors = None, cache
+                                      = False):
     """This function returns the interpolated quantity between two
     timesteps, from step1 to step2. Some galaxies are masked out: Any
     galaxy that doesn't pass the mask in step1 (mask1), any galaxy
@@ -771,42 +781,6 @@ def get_column_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mas
     return val_out
 
 
-def get_func_interpolation_dust_raw(key, h_in_gp1, h_in_gp2, index, mask1, mask2, step1_a, step2_a, target_a, dust_factors=1.0, luminosity_factors = 1.0):
-    """Returns the constants required to reconstruct the column at any redshift between 
-    the interpolation steps. The return values are val0, slope0 and dust_effect0 for the
-    function val(z, dust) = (val0 + slope0*del_a)*(dust_effect0**dust_factor)
-    """
-    step_del_a = step2_a - step1_a
-    target_del_a = target_a - step1_a
-    # The masking all galaxies that fail galmatcher's requirements at
-    # step1, galaxies that don't have a descndent, or if the
-    # descendent galaxy at step2 doesn't pass galmatcher requirements.
-    mask_tot = mask1 & (index != -1) & mask2[index]
-    if ":dustAtlas" in key:
-        key_no_dust = key.replace(":dustAtlas","")
-        val1_no_dust = h_in_gp1[key_no_dust].value[mask_tot]
-        val1_dust = h_in_gp1[key].value[mask_tot]
-        val2_no_dust = h_in_gp2[key].value[index][mask_tot]
-        dust_effect0 = val1_dust/val1_no_dust
-        val0 = val1_no_dust
-        slope0 = (val2_no_dust - val1_no_dust)/step_del_a
-        #val_out = (val1_no_dust + slope*target_del_a)*(dust_effect**dust_effect)
-    else:
-        val1_data = h_in_gp1[key].value[mask_tot]
-        val2_data = h_in_gp2[key].value[index][mask_tot]
-        slope0 = (val2_data - val1_data)/step_del_a
-        val0 = val1_data
-        dust_effect0 = np.ones(val0.size, dtype='f4')
-        #val_out = val1_data + slope*target_del_a
-    if(val0.dtype == np.float64):
-        val0 = val0.astype(np.float32)
-    if(slope0.dtype == np.float64):
-        slope0 = slope0.astype(np.float32)
-    if(dust_effect0.dtype == np.float64):
-        dust_effect0 = dust_effect0.astype(np.float32)
-    return val0, slope0, dust_effect0
-    
-
 def copy_columns_interpolation_dust_raw(input_fname, output_fname,
                                         kdtree_index, step1, step2,
                                         step1_a, step2_a, mask1, mask2, 
@@ -914,11 +888,11 @@ def copy_columns_interpolation_dust_raw_healpix(input_fname, output_fname,
     return
 
 
-def overwrite_columns(input_fname, output_fname, ignore_mstar = False, 
-                      verbose=False, cut_small_galaxies_mass = None, 
-                      internal_step=None, fake_lensing=False, healpix=False,
-                      step = None, healpix_shear_file = None, 
-                      no_shear_steps=None):
+def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
+                      verbose=False, cut_small_galaxies_mass = None,
+                      internal_step=None, fake_lensing=False,
+                      healpix=False, step = None, healpix_shear_file =
+                      None, no_shear_steps=None):
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
@@ -1166,7 +1140,8 @@ def rotate_host_halo(rot, x,y,z):
     return
 
 
-def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_step_loc, verbose=False):
+def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc,
+                        halo_shape_red_step_loc, verbose=False):
     hgroup = h5py.File(output_fname,'r+')['galaxyProperties']
 
     halo_tag = hgroup['hostHaloTag'].value
@@ -1266,7 +1241,8 @@ def overwrite_host_halo(output_fname, sod_loc, halo_shape_loc, halo_shape_red_st
     return
 
    
-def add_native_umachine(output_fname, umachine_native, cut_small_galaxies_mass = None,
+def add_native_umachine(output_fname, umachine_native,
+                        cut_small_galaxies_mass = None,
                         internal_step=None):
     t1 = time.time()
     if internal_step is None:
@@ -1452,7 +1428,8 @@ def combine_step_lc_into_one(step_fname_list, out_fname, healpix=False):
     return 
 
 
-def add_metadata(gal_ref_fname, out_fname, version_major, version_minor, version_minor_minor, healpix_ref=None, param_file=None):
+def add_metadata(gal_ref_fname, out_fname, version_major,
+                 version_minor, version_minor_minor, healpix_ref=None, param_file=None):
     """
     Takes the metadata group and copies it over the final output product. 
     Also for each data column, copies the units attribute. 
@@ -1826,7 +1803,8 @@ def plot_m_star(lc_data,gal_prop,index):
     return
 
 
-def plot_single_dist(lc_data,gal_prop,index,key_name,key_label,bins = None):
+def plot_single_dist(lc_data,gal_prop,index,key_name,key_label,bins =
+                     None):
     plt.figure()
     if bins is None:
         max_r = np.max((np.max(lc_data[key_name]),np.max(gal_prop[key_name][index])))
@@ -2136,7 +2114,8 @@ def lightcone_resample(param_file_name):
                                         cut_small_galaxies_mass = cut_small_galaxies_mass, 
                                         internal_step=internal_file_step,
                                         red_sequence_transition_mass_start = red_sequence_transition_mass_start,
-                                        red_sequence_transition_mass_end = red_sequence_transition_mass_end)
+                                        red_sequence_transition_mass_end = red_sequence_transition_mass_end, 
+                                        snapshot=snapshot)
         else:
             lc_data = construct_lc_data_healpix(lightcone_step_fname, verbose = verbose, recolor=recolor, 
                                                 match_obs_color_red_seq = match_obs_color_red_seq,
@@ -2190,11 +2169,6 @@ def lightcone_resample(param_file_name):
                     gal_prop_list = [] 
                     for dust_factor in np.concatenate(([1.0],dust_factors)):
                         print("\tdust_factor********=",dust_factor)
-                        # gal_prop_tmp,_ = construct_gal_prop_redshift_dust(gltcs_step_fname, gltcs_slope_step_fname,
-                        #                                                          step_a, abins_avg[k],
-                        #                                                          verbose = verbose,
-                        #                                                          mask = mask1,
-                        #                                                          dust_factor=dust_factor)
                         gal_prop_tmp2 = construct_gal_prop_redshift_dust_raw(
                             gltcs_fname, index_2to1, step, step2, step_a, step2_a, abins_avg[k],
                             mask1, mask2, dust_factor, match_obs_color_red_seq,
