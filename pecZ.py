@@ -53,3 +53,14 @@ def pecZ(x, y, z, vx, vy, vz, z_hubb, obs=np.zeros(3)):
     #pdb.set_trace()
 
     return z_pec, z_tot, v_pec, v_pec * a, r_rel_mag, r_rel_mag * a, r_dist
+
+def pecZ_snapshot(x, vx, z_hubb):
+    
+    c = const.c.value / 1000
+    z_pec = np.sqrt( (1+vx/c) / (1-vx/c)) - 1
+    z_tot = (1+z_hubb)*(1+z_pec) - 1
+
+    # find the distorted distance from appliying Hubble's law using the new z_tot z_hubbs
+    a = 1/(1+z_hubb)
+    r_dist = r_rel_mag + vx/100./cosmo.efunc(z_hubb)/a 
+    return z_pec, z_tot
