@@ -15,7 +15,7 @@ The main body of the pipeline.
 * Performs the matchup between the Galacticus library and baseDC2
   catalog.  The script takes in a single configuration files found in
   `param_lc_resample`. A description of the parameter file can be
-  found here >link<
+  found here [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md)
 
 
 Precomputations
