@@ -4,7 +4,7 @@ File Descriptions
 This file provides a quick description of each python file in the
 repo. The files are separated into eight generic groups. There are
 additional utility scripts for generating configuration files and
-cooley submission scripts described >link<
+cooley submission scripts described in >link<
 
 
 Main Executable
@@ -12,7 +12,7 @@ Main Executable
 The main body of the pipeline. 
 
 [lc_resample.py](lc_resample.py)
-* Preforms the matchup between the Galacticus library and baseDC2
+* Performs the matchup between the Galacticus library and baseDC2
   catalog.  The script takes in a single configuration files found in
   `param_lc_resample`. A description of the parameter file can be
   found here >link<
@@ -27,7 +27,7 @@ only ran once.
 [k_corr_step.py](k_corr_step.py)
 * Links library galaxies across an earlier and later time step. The
   links are recorded as indexes to rearrange the later time step to
-  match the earlier timestep.
+  match the earlier timestep. Only needs to run once per library.
 
 [precompute_mask.py](precompute_mask.py)
 * Precomputes which galaxies pass Eve's Galmatcher color and other
@@ -48,15 +48,11 @@ These scripts contain definitions and functions used by other scripts.
 Diagnostics & Plots
 -------------------
 
-These scripts plot various tests or help to investigate various bugs.
-
-
-[find_galaxies.py](find_galaxies.py)
-
-[find_galaxy.py](find_galaxy.py)
+These scripts plot various validations and sanity plots. Most of these
+scripts take in the same config file that `lc_resample.py` used to
+produce the catalog.
 
 [plot_color_match.py](plot_color_match.py)
-
 
 [plot_color_redshift_diagnostics.py](plot_color_redshift_diagnostics.py)
 
@@ -71,6 +67,18 @@ These scripts plot various tests or help to investigate various bugs.
 
 One-shot Tests
 --------------
+
+Scripts used figure out found bugs & issues. They were not used again
+after their purpose was done.
+
+[find_galaxies.py](find_galaxies.py)
+* Finds galaxies by hard coded ra/dec halo id. Saves basic halo and
+  central galaxy info from those galaxies
+  
+[find_galaxy.py](find_galaxy.py)
+* Finds a galaxy by ra/dec + other info. Was used to investigate a
+  strange galaxy with a strange Av/Rv values.
+
 [test_ellip.py](test_ellip.py)
 
 [test_k_corr_step.py](test_k_corr_step.py)
