@@ -1,5 +1,7 @@
 #!/usr/bin/env python2.7
 
+"""Many sanity plots for protoDC2 v4.X. 
+"""
 from __future__ import print_function, division
 
 

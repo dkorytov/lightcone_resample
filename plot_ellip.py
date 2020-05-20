@@ -1,5 +1,9 @@
 #!/usr/bin/env python2.7
 
+"""Plots the distribution of galaxy ellipticity. 
+"""
+
+
 from __future__ import division,print_function
 
 import numpy as np

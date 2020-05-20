@@ -1,4 +1,10 @@
 #!/usr/bin/env python2.7
+
+"""Recalculates bulge ellipticity from major and minor galaxy axis
+   lengths and overwrites the new values in the catalog hdf5
+   files. Takes in a `lc_resample.py` param file.
+
+"""
 from __future__ import print_function, division
 
 import numpy as np

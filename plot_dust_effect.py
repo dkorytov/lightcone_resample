@@ -1,6 +1,9 @@
 #!/usr/bin/env python2.7
 from __future__ import print_function, division
 
+"""Plots the strength of reddening from dust
+"""
+
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt

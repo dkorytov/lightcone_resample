@@ -1,5 +1,8 @@
 #!/usr/bin/env python2.7
 
+"""Gives number of nan in various columns.
+"""
+
 from __future__ import print_function, division
 
 

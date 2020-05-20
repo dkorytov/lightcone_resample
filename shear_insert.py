@@ -1,4 +1,10 @@
 #!/usr/bin/env python2.7
+
+"""Overwrites stored shear values with new values. The new shear
+values are taken from the shear file specified in the given
+`lc_resample.py` param file.
+
+"""
 from __future__ import print_function, division
 
 import numpy as np

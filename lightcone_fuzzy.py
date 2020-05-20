@@ -1,5 +1,14 @@
 #!/usr/bin/env python2.7
 
+"""This script mixes galaxies from in the baseDC2 into different time
+steps ussing halotools fuzzy binning. About half of the galaxies
+remain in their original time while the a quarter are shuffled into
+the earlier step and the other quarter into the later step. This was
+an attempt to fix the color-z banding we saw. it's superseded by the
+interpolation of library galaxies.
+
+"""
+
 from __future__ import print_function, division
 
 import numpy as np

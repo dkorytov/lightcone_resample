@@ -1,4 +1,9 @@
 #!/usr/bin/env python2.7
+
+"""Tests my implementation for linear interpolating Galacticus galaxy
+properties between time steps. 
+"""
+
 from __future__ import print_function, division
 
 import numpy as np

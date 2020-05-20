@@ -1,4 +1,10 @@
 #!/usr/bin/env python2.7
+
+"""Changes the version number saved in the cosmoDC2 hdf5 files. The
+script takes in an `lc_resample.py` param file as an argument to get
+hdf5 file locations and the new version number to write in.
+
+"""
 from __future__ import print_function, division
 
 import numpy as np

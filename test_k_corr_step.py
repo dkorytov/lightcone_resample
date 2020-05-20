@@ -1,5 +1,8 @@
 #!/usr/bin/env python2.7
 
+""" makes sure that `k_corr_step.py` computed slopes for every column
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as clr

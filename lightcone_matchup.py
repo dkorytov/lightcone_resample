@@ -1,5 +1,7 @@
 #!/usr/bin/env python2.7
-
+"""Combines baseDC2 lightcone with calculated shears. The process is now 
+done in `lc_resample.py`
+"""
 from __future__ import print_function, division
 
 import numpy as np

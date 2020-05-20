@@ -1,4 +1,10 @@
 #!/usr/bin/env python2.7
+
+"""Plots many ellipticity diagnostics. Also plots distribution of
+ellipticities for different B/T ratio galaxy bins.
+
+"""
+
 from __future__ import print_function, division
 import sys
 

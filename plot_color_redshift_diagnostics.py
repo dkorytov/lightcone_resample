@@ -1,5 +1,10 @@
 #!/usr/bin/env python2.7
 
+"""Plots color vs redshift for a sanity checks and color bands. This
+was adapted into DESCQA test called `color_z` (I think)
+
+"""
+
 from __future__ import print_function, division
 
 import numpy as np

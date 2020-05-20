@@ -1,4 +1,10 @@
 #!/usr/bin/env python2.7
+
+"""Subtracts 85 deg from dec_true and writes new value into hdf5
+catalog files. Takes in an `lc_resample.py` param file.
+
+"""
+
 from __future__ import print_function, division
 
 import numpy as np

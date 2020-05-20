@@ -1,5 +1,8 @@
 #!/usr/bin/env python2.7
 
+"""Plots the gr-ri color-color for protoDC2.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as clr

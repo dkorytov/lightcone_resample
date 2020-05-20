@@ -1,5 +1,7 @@
 #!/usr/bin/env python2.7
+""" Plots many different color diagnostics plots. 
 
+"""
 import numpy as np
 import matplotlib as mlp
 import matplotlib.pyplot as plt

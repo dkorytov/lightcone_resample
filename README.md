@@ -5,6 +5,7 @@ i.e: "./lc_resample.py param_lc_resamp/v4.1.dust136.param"
 There are dependencies on dtk, Eve's galmatcher and the 
 cosmoDC2 package.
 
+A complete list of files and their descriptions can be found in master_file_description.md
 
 Setup Scripts
 ============

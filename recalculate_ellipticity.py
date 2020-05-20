@@ -1,4 +1,10 @@
 #!/usr/bin/env python2.7
+
+"""Recalculates ellipticity using the methods defined in
+  `lc_resample.py` and overwrites new values into the catalog hdf5
+  files. Takes in a `lc_resample.py` param file.
+"""
+
 from __future__ import print_function, division
 import sys
 
