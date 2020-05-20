@@ -2,30 +2,43 @@
 Critical Executable
 ==============
 [k_corr_step.py](../blob/master/k_corr_step.py)
-[lc_resample.py](../blob/master/lc_resample.py)
-[precompute_mask.py](../blob/master/precompute_mask.py)
+
+[lc_resample.py](lc_resample.py)
+
+[precompute_mask.py](/master/precompute_mask.py)
 
 Parameter Folders
 ===============
-[params_kcorr](../blob/master/params_kcorr)
+[params_kcorr](../master/params_kcorr)
+
 [params_lc_matchup](../blob/master/params_lc_matchup)
+
 [params_lc_resamp](../blob/master/params_lc_resamp)
 
 Function Library/Definitions
 ============================
 [ellipticity_model.py](../blob/master/ellipticity_model.py)
+
 [pecZ.py](../blob/master/pecZ.py)
 
 Diagnostics & Plots
 ===================
 [ellipticity_model_testing.py](../blob/master/ellipticity_model_testing.py)
+
 [find_galaxies.py](../blob/master/find_galaxies.py)
+
 [find_galaxy.py](../blob/master/find_galaxy.py)
+
 [plot_color_match.py](../blob/master/plot_color_match.py)
+
 [plot_color_redshift_diagnostics.py](../blob/master/plot_color_redshift_diagnostics.py)
+
 [plot_colors.py](../blob/master/plot_colors.py)
+
 [plot_dust_effect.py](../blob/master/plot_dust_effect.py)
+
 [plot_ellip.py](../blob/master/plot_ellip.py)
+
 [plot_gr_ri.py](../blob/master/plot_gr_ri.py)
 
 
