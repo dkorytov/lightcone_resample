@@ -15,7 +15,7 @@ The main body of the pipeline.
 * Performs the matchup between the Galacticus library and baseDC2
   catalog.  The script takes in a single configuration files found in
   `param_lc_resample`. A description of the parameter file can be
-  found here [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md)
+  found in [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md)
 
 
 Precomputations
@@ -27,11 +27,15 @@ only ran once.
 [k_corr_step.py](k_corr_step.py)
 * Links library galaxies across an earlier and later time step. The
   links are recorded as indexes to rearrange the later time step to
-  match the earlier timestep. Only needs to run once per library.
+  match the earlier timestep. Only needs to run once per library. The
+  parameter file for this script can be found in
+  [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md).
 
 [precompute_mask.py](precompute_mask.py)
 * Precomputes which galaxies pass Eve's Galmatcher color and other
-  cuts. Stored as a boolean array for each timestep. 
+  cuts. Stored as a boolean array for each timestep. This script takes
+  in a `lc_resample.py` parameter file, overwriting the file that
+  `lc_resample.py` expects to load.
 
 
 Function Library & Definitions
