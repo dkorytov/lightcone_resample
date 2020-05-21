@@ -84,7 +84,7 @@ One-shot Tests
 --------------
 
 Scripts used figure out found bugs & issues. They were not used again
-after their purpose was done.
+after their purpose was completed.
 
 [find_galaxies.py](find_galaxies.py)
 * Finds galaxies by hard coded ra/dec halo id. Saves basic halo and
