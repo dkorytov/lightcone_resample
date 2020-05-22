@@ -22,15 +22,15 @@ settings. `lc_reample.py` and `k_corr_step.py` runs off .param files
 located in `param_lc_resamp/..` and `param_k_corr/...`,
 respectively. `precompute_mask.py` runs off the same .param file as
 `lc_resample.py`. A full description of the parameter files and the settings in them can be
-found in [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md)
+found in [PARAM_DESCRIPTIONS.md](PARAM_DESCRIPTIONS.md)
 
-Galaxy Masking, precompute_masks.py
+Precomputed Galaxy Masking, `precompute_masks.py`
 -------------------
 Not all Galacticus galaxy have reasonable colors or other properties. Galaxies with unreasonable properties are excluded from being used in the match up process. Eve's Galmatcher package determines which galaxies are acceptable. Unacceptable galaxies are excluded by applying a mask to the Galacticus galaxy array. Unless the Galacticus catalog or Galmatcher's requirements change, the masks only needs to be generated once.
 
 `precompute_masks.py` runs on the same .param file as for `lc_resample.py`. The param file specifies Galacticus files locations, time steps and output mask location (the mask location is an input for `lc_resample.py`)
 
-Galacticus Interpoliation, k_corr_step.py
+Precomputed Galacticus Interpoliation Indexes, `k_corr_step.py`
 --------------
 A core feature of the match up pipeline is the redshift interpolation of Galacticus galaxy properties. The Galacticus catalog only has descrete redshifts while we have continous redshifts in the baseDC2 lightcone. If galaxy properties are not interpolated, there will be descrete bands in color-z plots, see figures below.
 
@@ -51,12 +51,12 @@ There are a couple complications:
 * Not each galaxy exists the following time step, such as galaxy_2. This galaxy is simply excluded from the match up pipeline.
 * A galaxy may fail Galmatcher's color cuts for either step_i or step_i+1 but not both. To make sure a galaxy isn't interpolated into cut region, that galaxy is excluded from the matchup.
 
-Matchup Pipeline, lc_resample.py
+Matchup Pipeline, `lc_resample.py`
 --------------
- This is main body of the pipeline that does the matchup and generates the cosmoDC2 catalog. Like the other scripts, it takes in a single argument which is a paramter file. The .param file describes run time options and all input/output file locations. A full description of the param file can be found in [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md). The pipeline takes in lighcone baseDC2, the Galaticus library, lightcone shears, precomputed masks and interpolation indexes. The lightcone shears need to have exactly the same file structure and galaxy order as baseDC2. The pipeline produces intermediate files for each time step interval and the final catalog. The intermediate files can be deleted afterwards or kept to skip a part of the pipeline during a rerun. A full description of what goes on inside the matchup pipe is below.
+ This is main body of the pipeline that does the matchup and generates the cosmoDC2 catalog. Like the other scripts, it takes in a single argument which is a paramter file. The .param file describes run time options and all input/output file locations. A full description of the param file can be found in [PARAM_DESCRIPTIONS.md](PARAM_DESCRIPTIONS.md). The pipeline takes in lighcone baseDC2, the Galaticus library, lightcone shears, precomputed masks and interpolation indexes. The lightcone shears need to have exactly the same file structure and galaxy order as baseDC2. The pipeline produces intermediate files for each time step interval and the final catalog. The intermediate files can be deleted afterwards or kept to skip a part of the pipeline during a rerun. A full description of what goes on inside the matchup pipe is below.
 
 
-Internal Overview of lc_resample.py
+Internal Overview of the Matchup Pipeline, `lc_resample.py`
 =================
 
 There are bunch of internal processes 
