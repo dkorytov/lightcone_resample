@@ -234,10 +234,10 @@ Galacitcus galaxy properties These param files are stored in
 * `mtree_list`
   * If defined in the param file, the script ignores `mtree_ptrn` and `mtree_num` and
     loads AlphaQ merger trees from this (extremely) long explicit list
-    of files. This was required because the merger trees were split up
+    of files. This was required because the merger trees were split up into new files
     to help load balance Galactiucs. Galacticus was taking days(?) to
     run through some very long trees, so these trees were isolated and
-    submitted as long jobs. 
+    submitted as long jobs. These new files don't have a simple pattern to them, so an explicit list of files was easier to deal with.
 
 * `output_index_only`
   * Should be set to `true`. If set, it doesn't calculate the slope
