@@ -15,7 +15,7 @@ The main body of the pipeline.
 * Performs the matchup between the Galacticus library and baseDC2
   catalog.  The script takes in a single configuration files found in
   `param_lc_resample`. A description of the parameter file can be
-  found in [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md)
+  found in [PARAM_DESCRIPTIONS.md](PARAM_DESCRIPTIONS.md)
 
 
 Precomputations
@@ -29,7 +29,7 @@ only ran once.
   links are recorded as indexes to rearrange the later time step to
   match the earlier timestep. Only needs to run once per library. The
   parameter file for this script can be found in
-  [PARAM_DESCRIPTION.md](PARAM_DESCRIPTION.md).
+  [PARAM_DESCRIPTIONS.md](PARAM_DESCRIPTIONS.md).
 
 [precompute_mask.py](precompute_mask.py)
 * Precomputes which galaxies pass Eve's Galmatcher color and other
