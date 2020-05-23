@@ -199,13 +199,37 @@ These parameter files are stored  in `param_lc_resamp/..`
 
 
 * `concatenate_only`
-  - Should be set to `false` for production runs. If set to `true`, it
-    will skip the matchup process and work from the intermediate
-    "steps" files to produce the "all" file. (see description for
-    `output_fname`). Allows for fixing errors or bugs that occurred
-    between the intermediate "step" file generation and final "all" file
-    generation.
+  - Should be set to `false` or not defined for production runs. If
+    set to `true`, it will skip the matchup process and work from the
+    intermediate "steps" files to produce the "all" file. (see
+    description for `output_fname`). Allows for fixing errors or bugs
+    that occurred between the intermediate "step" file generation and
+    final "all" file generation.
 
+* `snapshot`
+  - Should be set to `false` or not defined for production runs. This
+    option sets if the cosmoDC2 catalog is a lightcone (i.e. the
+    typical run) or if the final catalog will be in discrete
+    snapshots.
+	
+* `resume_at_step`
+  - Should be not defined for production runs. This skips producing
+    intermediate "step" files until it passes the step specified by
+    this variable.
+  
+  
+* `no_shear_steps`
+  - Should be not defined for production runs. For the listed time
+    steps (separated by white space), the pipeline will not attempt to
+    load the shear file and will insert zero shear. I believe this was
+    introduced when we somehow didn't have shears for a couple time
+    steps.
+	
+* `metadata_only`
+  - Should be set to `false` or not defined for production runs. If
+    set to `true`, the script will directly skip to the add metedata
+    and column units part of the pipeline. It was used fix bugs in
+    those areas without rerunning the entire pipeline.
 
 Param file for `k_corr_step.py` script
 ---
@@ -232,12 +256,14 @@ Galacitcus galaxy properties These param files are stored in
     "${num}" in `mtree_ptrn`
 
 * `mtree_list`
-  * If defined in the param file, the script ignores `mtree_ptrn` and `mtree_num` and
-    loads AlphaQ merger trees from this (extremely) long explicit list
-    of files. This was required because the merger trees were split up into new files
-    to help load balance Galactiucs. Galacticus was taking days(?) to
-    run through some very long trees, so these trees were isolated and
-    submitted as long jobs. These new files don't have a simple pattern to them, so an explicit list of files was easier to deal with.
+  * If defined in the param file, the script ignores `mtree_ptrn` and
+    `mtree_num` and loads AlphaQ merger trees from this (extremely)
+    long explicit list of files. This was required because the merger
+    trees were split up into new files to help load balance
+    Galactiucs. Galacticus was taking days(?) to run through some very
+    long trees, so these trees were isolated and submitted as long
+    jobs. These new files don't have a simple pattern to them, so an
+    explicit list of files was easier to deal with.
 
 * `output_index_only`
   * Should be set to `true`. If set, it doesn't calculate the slope

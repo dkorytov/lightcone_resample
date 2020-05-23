@@ -2007,7 +2007,11 @@ def plot_gal_prop_dist(gal_props, gal_props_names):
 
 def lightcone_resample(param_file_name):
     t00 = time.time()
-    # Loading in all the parameters from the parameter file
+
+    #########################################################
+    # Loading in all the parameters from the parameter file #
+    #########################################################
+     
     param = dtk.Param(param_file_name)
     lightcone_fname = param.get_string('lightcone_fname')
     gltcs_fname = param.get_string('gltcs_fname')
@@ -2092,7 +2096,11 @@ def lightcone_resample(param_file_name):
     red_sequence_transition_mass_start = red_sequence_transition_mass_start,
     red_sequence_transition_mass_end = red_sequence_transition_mass_end
 
-
+    
+    ########################
+    # process parameters   #
+    ########################
+    
     # The other options are depricated
     assert use_dust_factor & use_slope, "Must set use_dust_factor and use_slope to true. The other settings are depricated"
     assert ("${step}" in output_fname), "Must have ${step} in output_fname to generate sperate files for each step"
@@ -2118,6 +2126,12 @@ def lightcone_resample(param_file_name):
     output_step_list = [] # A running list of the output genereated for each time step. 
     # After all the steps run, the files are concatenated into one file. 
 
+
+    ##########################################
+    # Start making intermediate "step" files #
+    ##########################################
+        
+
     # If it's on a snapshot, we will run on every single step. So we
     # will iterate the same as number of times as steps given
     if snapshot: 
@@ -2128,27 +2142,23 @@ def lightcone_resample(param_file_name):
     else:
         step_i_limit = steps.size-1
 
+
     for i in range(0,step_i_limit):
         # Since the interpolation scheme needs to know the earlier and later time step
         # that are interpolated between, we iterate over all pairs of steps. The outputs
         # are are labeled with the earlier time step i.e. the interpolation between 487
         # and 475 are output is labeled with 475
         t0 = time.time()
-        if snapshot: # We will be "interpolating" between the same two snapshots
+        if snapshot: # We will be "interpolating" between the same two snapshots as a hack solution
             step = steps[i]
             step2 = steps[i]
-        else: # lightcone interpolation 
+        else: # normal lightcone interpolation 
             step = steps[i+1]
             step2 = steps[i]
         print("\n\n=================================")
         print(" STEP: ",step)
-        gltcs_step_fname = gltcs_fname.replace("${step}",str(step)) 
-        lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
-        output_step_loc = output_fname.replace("${step}",str(step))
-        output_step_list.append(output_step_loc)
-        sod_step_loc = sod_fname.replace("${step}",str(step))
-        halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
-        halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
+
+        # Check if need to skip this timestep        
         if concatenate_only or metadata_only: 
             print("Skipping: concatenate_only is true ")
             continue
@@ -2161,7 +2171,17 @@ def lightcone_resample(param_file_name):
             print("resuming: step {} > resume {}".format(step,resume_at_step))
         else:
             print("not a resume run")
-   
+
+        # Get file paths for files for this step
+        gltcs_step_fname = gltcs_fname.replace("${step}",str(step)) 
+        lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
+        output_step_loc = output_fname.replace("${step}",str(step))
+        output_step_list.append(output_step_loc)
+        sod_step_loc = sod_fname.replace("${step}",str(step))
+        halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
+        halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
+
+        # load in the precomputed mask, or calculate it.
         if load_mask:
             mask1 = hfile_mask['{}'.format(step)].value
             mask2 = hfile_mask['{}'.format(step2)].value
@@ -2173,7 +2193,10 @@ def lightcone_resample(param_file_name):
             mask_a = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection1)
             mask_b = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection2)
             mask2 = mask_a & mask_b
+
+        # sets printing options
         verbose = True
+        
         # Healpix cutouts/files have the step saved inside of them.
         if healpix_file:
             internal_file_step = step
