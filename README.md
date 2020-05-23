@@ -67,29 +67,35 @@ file that controls.
 
 ![Whitebox Overview](doc_figures/Internal%20Matchup%20Pipeline.png)
 
-In short, the scripts loads all run time specifications and
+
+The scripts loads all run time specifications and
 input/output files locations from a parameter file. The script runs
 mainly on time step intervals, producing almost complete cosmoDC2
-catalogs for each time step (which I'm calling "step" files). To
-produce these intermediate files, it loads in the time step slice of
-the baseDC2 lightcone galaxy and the two Galacticus catalogs that
+catalogs for each time step (which I'm calling "step" files). 
+
+To produce these intermediate files, it loads in the time step slice
+of the baseDC2 lightcone galaxy and the two Galacticus catalogs that
 straddle the redshift range of the lightcone section and finds matches
 between between Galacticus and baseDC2 galaxies. The matching is done
 by splitting up the time step interval into even smaller redshift
 ranges (called "substeps"), interpolating Galacitcus galaxies to the
 substep redshift and preforming a nearest neighbor search by restframe
 Mr, g-r, r-i colors for field galaxies and additional observer frame
-g-r, r-i and i-z colors for cluster red sequence galaxies. Once all
-the substeps are done and we have matches for all the galaxies within
-the time step intervals, properties from matched Galacticus galaxies
-are interpolated to the exact redshift of the lightcone baseDC2 galaxy
-and additional properties are added on top (such as size, shear,
-stellar mass, etc) of what Galacticus provides. All these properties
-are written to disk as a "step" file. Once all the step files are
-produced, a new file for all the steps is created (called the "all"
-file because the step number is replace by "all") which is effectively
-a simple concatenation. After the concatenation, metadata and column
-units are added to produce the final cosmoDC2 catalog.
+g-r, r-i and i-z colors for cluster red sequence galaxies.
+
+Once all the substeps are done and we have matches for all the
+galaxies within the time step intervals, properties from matched
+Galacticus galaxies are interpolated to the exact redshift of the
+lightcone baseDC2 galaxy and additional properties are added on top
+(such as size, shear, stellar mass, etc) of what Galacticus
+provides. All these properties are written to disk as a "step"
+file. 
+
+Once all the step files are produced, a new file for all the
+steps is created (called the "all" file because the step number is
+replace by "all") which is effectively a simple concatenation. After
+the concatenation, metadata and column units are added to produce the
+final cosmoDC2 catalog.
 
 
 Workflow Walk Through 
