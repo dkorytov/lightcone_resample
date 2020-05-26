@@ -71,6 +71,26 @@ def construct_gal_prop(fname, verbose=False, mask = None, mag_r_cut =
 
 
 def cat_dics(dics, keys = None):
+    """ Takes in a list of dictionaries[string -> array] and 
+    combines all dictionaries into a single dictionary[string->array]. 
+    
+    
+    Parameters
+    ----------
+
+    dics : list[dictionary[string -> array]]
+       A list of dictionary-arrays to combine.
+
+    keys : list[string] or None, optional
+       A list keys to keep during the concatenation
+
+    Returns
+    -------
+    
+    new_dic : dictionary[string -> array]
+       The concatenated dictionary  
+    
+    """
     new_dic = {}
     if keys is None:
         keys = dics[0].keys()
@@ -554,6 +574,27 @@ def construct_lc_data_healpix(fname, match_obs_color_red_seq = False,
 
 
 def dic_select(dic, slct):
+    """ Returns a dictionary-array with an applied 
+    mask on data rows. 
+
+    Parameters
+    ----------
+    
+    dic : dictionary[string->array]
+       The dictionary-array data struct that we will be selecting rows
+       from. 
+
+    slct : array[boolean]
+       The masking boolean array to apply to the dictionary.
+       
+    Returns
+    -------
+    
+    new_dic : dictionary[string->array]
+       A new  dictionary-array with only the non-masked
+       data rows from the input dictionary
+    
+    """
     new_dic = {}
     for key in dic.keys():
         new_dic[key] = dic[key][slct]
@@ -601,6 +642,49 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10,
                    verbose = False, ignore_bright_luminosity=False,
                    ignore_bright_luminosity_threshold=None,
                    ignore_bright_luminosity_softness=0.0, ):
+    """Finds the nearest neighbors for each baseDC2 galaxy from
+    Galacticus.  It returns the index of the matched Galacticus galaxy
+    for each baseDC2 galaxy.
+    
+    Parameters
+    ----------
+
+    lc_data : dictionary[string -> array]
+       The prepared baseDC2 catalog for this step
+
+    gal_prop : dictionary[string -> array]
+       The prepared Galacticus for this (sub)step
+
+    ignore_mstar : boolean
+       If set to true, the match up algorithm will not try to match 
+       stellar mass. 
+
+    nnk : int
+       Set how many nearest neighbors should the match up be drawn from. 
+       This reduces stripes in color-z plots
+ 
+    verbose : boolean
+       If set to true, will verbosely print statements
+
+    ignore_bright_luminosity : boolean
+       If set to true, the bright luminosities will be squashed into a more 
+       narrow range. 
+
+    ignore_bright_luminosity_threshold : float
+       The asymptotic limit the squashed magnitudes will apporach
+
+    ignore_bright_luminosity_softness : float
+       Sets how softly the compression of magnitudes starts. A value of zero
+       will be floor function. Magnitudes fainter than threshold-softness will 
+       not be affected 
+
+    Returns
+    -------
+
+    index: array[int]
+       The indexes for the matched Galacticus galaxies to baseDC2
+
+    """
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling")
@@ -689,6 +773,56 @@ def resample_index_cluster_red_sequence(lc_data, gal_prop, ignore_mstar
                                        ignore_bright_luminosity_threshold=False,
                                        ignore_bright_luminosity_softness=0.0,
                                        rs_scatter_dict = {}):
+    """Finds the nearest neighbors for each baseDC2 red sequence cluster
+    galaxy from Galacticus.  It returns the index of the matched
+    Galacticus galaxy for each baseDC2 red sequence cluster
+    galaxy. This method is almost the same as non-red sequence function. 
+    
+    Parameters
+    ----------
+
+    lc_data : dictionary[string -> array]
+       The prepared baseDC2 catalog for this step
+
+    gal_prop : dictionary[string -> array]
+       The prepared Galacticus for this (sub)step
+
+    ignore_mstar : boolean
+       If set to true, the match up algorithm will not try to match 
+       stellar mass. 
+
+    nnk : int
+       Set how many nearest neighbors should the match up be drawn from. 
+       This reduces stripes in color-z plots
+ 
+    verbose : boolean
+       If set to true, will verbosely print statements
+
+    ignore_bright_luminosity : boolean
+       If set to true, the bright luminosities will be squashed into a more 
+       narrow range. 
+
+    ignore_bright_luminosity_threshold : float
+       The asymptotic limit the squashed magnitudes will apporach
+
+    ignore_bright_luminosity_softness : float
+       Sets how softly the compression of magnitudes starts. A value of zero
+       will be floor function. Magnitudes fainter than threshold-softness will 
+       not be affected 
+
+    rs_scatter_dict : dictionary[string -> float]
+       The dictionary holding the red sequence scatter information, which is six
+       parameters: three colors (g-r, r-i, i-z) and two modes (scatter applied to 
+       baseDC2 expectation and scatter applied to Galacticus observed colors)
+
+    Returns
+    -------
+
+    index: array[int]
+       The indexes for the matched Galacticus galaxies to baseDC2
+
+    """
+
     if verbose:
         t1 = time.time()
         print("Starting kdtree resampling with obs colors")
@@ -1023,6 +1157,87 @@ def copy_columns_interpolation_dust_raw(input_fname, output_fname,
                                         library_index = None,
                                         node_index = None,
                                         snapshot = False):
+
+    """
+    Copies data columns from the matched Galacticus galaxies into
+    the intermediate "step" file. 
+
+    Paramters
+    ---------
+    input_fname : string
+       Galacticus file pattern
+
+    output_fname : string
+       Where to write to intermediate "step" file
+ 
+    kdtree_index : array[int]
+       The index to the matched Galacticus galaxy for each 
+       baseDC2 galaxy.
+
+    step1 : int
+       The lower time step number for this time step interval
+
+    step2 : int
+       The upper time step number for this time step interval
+
+    step1_a : float
+       The earlier scale factor for this time step interval
+
+    step2_a : float
+       The later scale factor for this time step interval
+
+    mask1 : array[boolean]
+       Galmatcher's masking array for Galacticus step_1
+
+    mask2 : array[boolean]
+       Galmatcher's masking array for Galacticus step_2
+
+    index_2to1 : array[int]
+       The indexing to reorder Galacticus step_2 galaxies 
+       into step_1 order
+
+    lc_a : array[int]
+       The scale factor for baseDC2 galaxies
+
+    verbose : boolean
+       If set to true, will print more statements
+
+    short : boolean
+       If set to true, doesn't copy SED, other, and lines
+       luminosities
+
+    supershort : boolean
+       if set to true, only SDSS rest frame magnitudes are
+       copied
+
+    step : int
+       The time step number for this time step interval. It should be 
+       step_1. 
+
+    dust_factors : float or array[float]
+       The dust factors to apply to Galacticus while copying. A 
+       different dust factor can be set for each baseDC2 galaxy.
+
+    luminosity_factors : array[float] or None
+       The luminosity rescaling applied to each Galacticus galaxy
+       to match baseDC2 luminosity. 
+
+    library_index : array[int] or None
+       The raw index into Galacticus (without the mask) for the match
+       up
+
+    node_index : array[int] or None
+       The Galacticus ID (called node_index in Galacticus) for the 
+       match up.
+
+    snapshot : boolean
+       If set to true, it will run options for a snapshot cosmoDC2
+       catalog
+
+    Returns
+    -------
+
+    """
     print("===================================")
     print("copy columns interpolation dust raw")
     # lc_a = 1.0/(1.0+lc_redshift)
@@ -1128,6 +1343,58 @@ def overwrite_columns(input_fname, output_fname, ignore_mstar = False,
                       None, no_shear_steps=None,
                       snapshot = False,
                       snapshot_redshift = None):
+    """
+    Writes x, y, z, ra, dec, shear and some other columns. 
+    
+    Parameters
+    ----------
+    input_fname : string
+       BaseDC2 input file pattern
+
+    output_fname : string
+       Location of the intermediate "step" file
+
+    ignore_mstar : boolean
+       If set to true, copy baseDC2 stellar mass instead of Galacticus'
+
+    verbose : boolean
+       If set to true, it will print extra statements
+
+    cut_small_galaxies_mass : float or None
+       If set, it will skip galaxies below the mass cut. 
+
+    internal_step : int or None
+       If set, it will access the step group in the hdf5 file
+       for healpix pixel files. 
+
+    fake_lensing : boolean
+       If set, it will ignore the shear and insert zero shear 
+       for all galaxies
+
+    healpix : boolean
+       if set, it will read files as with the expectation that 
+       they are healpix files. 
+
+    step : int
+       The time step ID for the this time step interval
+
+    healpix_shear_file : string
+       The file location for the shear files
+
+    no_shear_steps : list(int) or None
+       For these specific steps, ignore the shear files and insert
+       zero shears. 
+
+    snapshot : boolean
+       If set, sets up the run for a snapshot run. 
+
+    snapshot_redshift : float or None
+       The redshift of the snapshot must be set for a snapshot
+       run. 
+       
+    Returns
+    -------
+    """
     t1 = time.time()
     if verbose:
         print("Overwriting columns.")
