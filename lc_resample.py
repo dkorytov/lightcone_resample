@@ -1,4 +1,22 @@
 #!/usr/bin/env python2.7
+"""This main pipeline for producing comsoDC2 and sister catalogs.
+
+The `lc_resample.py` is call with a single argument which is the path
+to the configuration or parameter file. These parameter files control
+all run time options and point to all the input and output files. The
+parameter files for `lc_resample.py` are stored in the
+`params_lc_resamp/..` directory. A full description of the param file
+variables can be found in
+[PARAM_DESCRIPTIONS.md.
+
+The pipeline run starts with a function call to
+`lightcone_resample(param_file)`, which I believe should be able to be
+called by another script if `lc_resample.py` is imported. The function
+loads the specified parameter file and pull outs all expected
+parameters.
+
+"""
+
 from __future__ import print_function, division
 import sys
 
@@ -94,8 +112,67 @@ def construct_gal_prop_redshift_dust_raw(fname, index, step1, step2,
                                          match_obs_color_red_seq = False,
                                          cut_small_galaxies_mass = None, 
                                          snapshot = False):
-    """Constructs gal_prop using the interpolation scheme from the galacticus
-    snapshots and index matching galaxies in step2 to galaxies in step1. 
+    """Loads in two Galacticus snapshots catalog files and interpolates it 
+    to the target scale factor. It only loads in columns required for the 
+    match up
+    
+    Parameters
+    ----------
+    
+    fname : string
+       File path to Galacticus with the step number as "${step}". 
+
+    index : array[int] 
+       The indexing that will rearrange Galacticus from step2 to have
+       same galaxy order as step1
+
+    step1 : int
+       The earlier time step
+
+    step2 : int 
+       The later time step
+
+    step1_a : float 
+       The earlier scale factor
+
+    step2_a : float 
+       The later scale factor
+
+    target_a : float or array[float] 
+       The scale factor we are interpolating to
+    
+    mask1 : array[boolean]
+       The boolean array that masks out galaxies in step1
+       that didn't pass galmatcher's cut
+
+    mask2 : array[boolean] 
+       The boolean array that masks out galaxies in step2
+       that didn't pass galmatcher's cut
+       
+    dust_factor : float, optional
+       How much to multiply the effect of dust in galacticus 
+       by measuring the effect of dust from dusted & no-dust 
+       columns.
+    
+    match_obs_color_red_seq : boolean, optional
+       If to include expected observed red sequence colors
+       to the output to later match against Galacticus
+
+    cut_small_galaxies_mass : float or None, optional
+       If set to a float, then remove all galaxies below the
+       log10 mass cut. This is purely to make quick runs. 
+
+    snapshot : boolean
+       If true, do the appropriate for a snapshot cosmoDC2 
+       catalog.
+
+    Returns
+    -------
+    gal_prop : dictionary[arrays[mixed]]
+       The interpolated galaxy properties of the Galacticus
+       catalog.
+    
+
     """
     h_in_gp1 = h5py.File(fname.replace("${step}", str(step1)), 'r')['galaxyProperties']
     h_in_gp2 = h5py.File(fname.replace("${step}", str(step2)), 'r')['galaxyProperties']
@@ -247,6 +324,56 @@ def construct_lc_data(fname, match_obs_color_red_seq = False, verbose
                       red_sequence_transition_mass_start=13.0,
                       red_sequence_transition_mass_end=13.5, 
                       snapshot = False):
+    """
+    Loads in the baseDC2 catalog for a time step and formats it into a 
+    dictionary of arrays. 
+
+    Parameters
+    ----------
+
+    fname : string
+       The file location of baseDC2 to load
+
+    match_obs_color_red_seq : boolean, optional
+       If red sequence galaxies are matched on observed colors, we will 
+       added the expected colors the baseDC2 data structure. 
+
+    verbose : boolean, optional
+       If set to true, prints extra information.
+
+    recolor : boolean, optional
+       If set to true, replaces the galaxy colors in the baseDC2 colors
+       assigned from the cosmoDC2 package. This to quickly run a new tuning
+       without creating an entire new baseDC2 catalog.
+
+    internal_step : int or None, optional
+       Healpix baseDC2 files have an internal group for each time step. 
+
+    cut_small_galaxies_mass : float or None, optional
+       If set to a value, the output will not have any galaxy below the
+       specified mass cut.
+
+    red_sequence_transition_mass_start : float 
+       All red sequence cluster galaxies in host halos below this mass
+       will not have observed colors matched. This ratio increases to 100%
+       at red_sequence_transition_mass_end.
+
+    red_sequence_transition_mass_end : float
+       All red sequence cluster galaxies in host halos above this mass
+       will not have observed colors matched. This ratio decreases to 0%
+       at red_sequence_transition_mass_start.
+
+    snapshot : boolean
+       If set to true, will run setting for a snapshot catalog
+
+    Returns
+    -------
+
+    lc_data : dictionary[array[mixed]]
+       BaseDC2 loaded into dictionary of arrays to be used in matching with 
+       Galacticus. 
+
+    """
     t1 = time.time()
     lc_data = {}
     if snapshot: # Snapshot baseDC2 format
@@ -342,6 +469,57 @@ def construct_lc_data_healpix(fname, match_obs_color_red_seq = False,
                               red_sequence_transition_mass_start=13.0,
                               red_sequence_transition_mass_end=13.5, 
                               snapshot=False):
+    """
+    Loads in the baseDC2 catalog saved in healpix format a time step
+    and formats it into a dictionary of arrays. It effectively calls 
+    the non-healpix version of this function and concatenates the 
+    results for each healpix into a single dictionary or arrays.
+
+    Parameters
+    ----------
+
+    fname : string
+       The file location of baseDC2 to load
+
+    match_obs_color_red_seq : boolean, optional
+       If red sequence galaxies are matched on observed colors, we will 
+       added the expected colors the baseDC2 data structure. 
+
+    verbose : boolean, optional
+       If set to true, prints extra information.
+
+    recolor : boolean, optional
+       If set to true, replaces the galaxy colors in the baseDC2 colors
+       assigned from the cosmoDC2 package. This to quickly run a new tuning
+       without creating an entire new baseDC2 catalog.
+
+    internal_step : int or None, optional
+       Healpix baseDC2 files have an internal group for each time step. 
+
+    cut_small_galaxies_mass : float or None, optional
+       If set to a value, the output will not have any galaxy below the
+       specified mass cut.
+
+    healpix_pixels : list(int) or None
+       If non, it calls the non-healpix version. If there's a list of 
+       healpix pixels, it calls the non-healpix version on each healpix
+       and concatenates the results. 
+
+    red_sequence_transition_mass_start : float 
+       All red sequence cluster galaxies in host halos below this mass
+       will not have observed colors matched. This ratio increases to 100%
+       at red_sequence_transition_mass_end.
+
+    red_sequence_transition_mass_end : float
+       All red sequence cluster galaxies in host halos above this mass
+       will not have observed colors matched. This ratio decreases to 0%
+       at red_sequence_transition_mass_start.
+
+    snapshot : boolean
+       If set to true, will run setting for a snapshot catalog
+
+    """
+
     print("Construicting light cone data.")
     print("Input lightcone file pattern: ", fname)
     print("Healpix files: ",healpix_pixels)
@@ -504,7 +682,7 @@ def resample_index(lc_data, gal_prop, ignore_mstar = False, nnk = 10,
     return index
    
 
-def resample_index_cluster_red_squence(lc_data, gal_prop, ignore_mstar
+def resample_index_cluster_red_sequence(lc_data, gal_prop, ignore_mstar
                                        = False, nnk = 10, verbose =
                                        False,
                                        ignore_bright_luminosity=False,
@@ -611,8 +789,22 @@ def soft_transition(vals, trans_start, trans_end):
 
 def get_rs_scatter_dict_from_param(param):
     """This function takes in a dtk.Param object and returns a dictionary 
-    containing the scatter"""
-    print("seaching param file for red squence scatter information")
+    containing the scatter for the red sequence
+
+    Parameters
+    ----------
+
+    param : dtk.Param
+        The object that processes the parameter text file. 
+
+    Returns
+    -------
+
+    rs_scatter_dict : dict[string->float]
+        A dictionary containing the scatter for g-r, r-i, and i-z colors
+        to be applied to Galacitucs (tree) or to baseDC2 (query).
+    """
+    print("seaching param file for red sequence scatter information")
     rs_scatter_dict = {}
     colors = ['gr', 'ri', 'iz']
     scatter_locations = ['query', 'tree']
@@ -2006,12 +2198,30 @@ def plot_gal_prop_dist(gal_props, gal_props_names):
     
 
 def lightcone_resample(param_file_name):
+    r"""
+    The main pipeline function for the match up. It takes in a single
+    argument of the parameter configure file for the run.
+
+    Parameters
+    ----------
+
+    param_file_name : string
+       The file path to the configuration/parameter file. The description
+       of the parameter file can be found in PARAM_DESCRIPTION.md
+
+    """
     t00 = time.time()
 
     #########################################################
     # Loading in all the parameters from the parameter file #
     #########################################################
-     
+
+    # Some parameters have default values that don't required to
+    # be defined in the .param file. That's to ensure a current version of
+    # the script will be able to run older parameter files before those
+    # options were added. Immediately after extracting the variables, the
+    # script processes and checks the variables.
+
     param = dtk.Param(param_file_name)
     lightcone_fname = param.get_string('lightcone_fname')
     gltcs_fname = param.get_string('gltcs_fname')
@@ -2091,7 +2301,12 @@ def lightcone_resample(param_file_name):
         snapshot = param.get_bool("snapshot")
     else:
         snapshot = False
-    # Adding scatter to the red squence
+    if "verbose" in param:
+        verbose = param.get_bool('verbose')
+    else:
+        verbose = True
+
+    # Adding scatter to the red sequence
     rs_scatter_dict = get_rs_scatter_dict_from_param(param)
     red_sequence_transition_mass_start = red_sequence_transition_mass_start,
     red_sequence_transition_mass_end = red_sequence_transition_mass_end
@@ -2110,12 +2325,32 @@ def lightcone_resample(param_file_name):
         assert ((healpix_shear_file is None) or healpix_shear_file == "NULL"), "If `fake_lensing` is set to true, healpix_shear_file must either not in the param file or set to NULL."
     if not cut_small_galaxies: # if we don't cut out small galaxies, set the mass limit
         cut_small_galaxies_mass = None # to None as a flag for other parts in the code
+        
     # Check for setting for snapshot runs
+
+    # Here and a bit further down, the script sets options depending if this is a
+    # lightcone catalog (which is the typical run) or a snapshot
+    # catalog. The main run time difference between lightcone and snapshot
+    # catalogs is how the steps are handled. For lightcones, the pipeline
+    # interpolates Galacticus galaxy properties between discrete time
+    # steps. For snapshots, the pipeline doesn't need to interpolate since
+    # all the Galacticus galaxies are already at the correct
+    # redshift. Technically, the pipeline *still* interpolates properties
+    # but between two of the same time step in Galacticus. This was an
+    # simple solution to avoid writing large chunks of new code and
+    # introducing bugs.
+
+    # sanity checks for snapshot runs
     if snapshot:
         assert substeps == 1, "For snapshots, there is no reason to have more than 1 substep. Maybe this is suppposed to be a lightcone run?"
         assert use_substep_redshift, "For snapshots, there is not reason not use the substep redshift for all galaxies. If this is set to false, maybe this is supposed to be a light conerun?"
         
-    # Load Eve's galmatcher mask. Another script writes the mask to file (Need to check which one)
+    # Preparing how to handle Galmatchers masks. If
+    # there are cached precomputed masks, it will load those masks. If there
+    # aren't, it will create objects that calculate the mask on the
+    # fly. It's faster to use the precomputed masks of course. The
+    # precomputed masks are made by `precompute_masks.py`. 
+
     if load_mask:
         hfile_mask = h5py.File(mask_loc,'r')
     else:
@@ -2143,7 +2378,13 @@ def lightcone_resample(param_file_name):
         step_i_limit = steps.size-1
 
 
+
     for i in range(0,step_i_limit):
+
+        # Now we start on making on intermediate "step" files. We will iterate
+        # over the adjacent time steps pairs for lightcone or single time steps
+        # for snapshots.  
+
         # Since the interpolation scheme needs to know the earlier and later time step
         # that are interpolated between, we iterate over all pairs of steps. The outputs
         # are are labeled with the earlier time step i.e. the interpolation between 487
@@ -2158,7 +2399,10 @@ def lightcone_resample(param_file_name):
         print("\n\n=================================")
         print(" STEP: ",step)
 
-        # Check if need to skip this timestep        
+
+
+        # First we check if we need to skip producing this "step"
+        # file because of some option set in the paramter file.
         if concatenate_only or metadata_only: 
             print("Skipping: concatenate_only is true ")
             continue
@@ -2172,7 +2416,7 @@ def lightcone_resample(param_file_name):
         else:
             print("not a resume run")
 
-        # Get file paths for files for this step
+        # Get all file paths for files we will be using in this step
         gltcs_step_fname = gltcs_fname.replace("${step}",str(step)) 
         lightcone_step_fname = lightcone_fname.replace("${step}",str(step))
         output_step_loc = output_fname.replace("${step}",str(step))
@@ -2181,7 +2425,8 @@ def lightcone_resample(param_file_name):
         halo_shape_step_loc = halo_shape_fname.replace("${step}",str(step))
         halo_shape_red_step_loc = halo_shape_red_fname.replace("${step}",str(step))
 
-        # load in the precomputed mask, or calculate it.
+        # Then we get the correct file names for this time step. Load
+        # in the cached galmatcher's masks or calculate them.
         if load_mask:
             mask1 = hfile_mask['{}'.format(step)].value
             mask2 = hfile_mask['{}'.format(step2)].value
@@ -2194,10 +2439,23 @@ def lightcone_resample(param_file_name):
             mask_b = galmatcher.mask_cat(h5py.File(gltcs_step2_fname, 'r'), selections=selection2)
             mask2 = mask_a & mask_b
 
-        # sets printing options
-        verbose = True
-        
-        # Healpix cutouts/files have the step saved inside of them.
+
+
+        ######################
+        # Loading in baseDC2 #
+        ######################
+
+        # Now we load in the baseDC2 into a dictionary of arrays, which each
+        # array being a data column from baseDC2. If we are loading in healpix
+        # pixel groups, each pixel file is loaded into its own dictionary and
+        # all the pixel dictionaries are concatenated into one dictionary.  A
+        # column is added remember which data row came from which file in order
+        # to write this dictionary to multiple files. 
+
+        # Healpix cutouts/files have the step saved inside of them as
+        # folders, so we need to know.  this code segment (with
+        # internal_file_step) can setup inside later if statements,
+        # but I don't want to refactor the code too much.
         if healpix_file:
             internal_file_step = step
         else:
@@ -2231,9 +2489,14 @@ def lightcone_resample(param_file_name):
         else:
             index_2to1 = h5py.File(index_loc.replace("${step}",str(step)), 'r')['match_2to1'].value
             snapshot_redshift = None
-        #There is no other option. I just don't want to re-indent this entire block of code--
-        #emacs doesn't re-indent python code well
-        if(use_slope): 
+        #There is no other option. I just don't want to re-indent this
+        #entire block of code and introduce a bug
+        if(use_slope):
+            # Next, we copy order the redshift column and get the scale factor,
+            # finding the min and max scale factors to split up into substeps. A
+            # little buffer is added to the min/max values to ensure no galaxy is
+            # exactly on the boundary.
+
             print("using interpolation on step", step)
             lc_a = 1.0/(1.0 +lc_data['redshift'])
             lc_a_cc = np.copy(lc_a) # galaxy scale factor for copy columns
@@ -2252,6 +2515,14 @@ def lightcone_resample(param_file_name):
             # print("gltcs        a: {}".format(1.0/(1.9472+1.0)))
             print("===================")
 
+            
+            # Next, we create buffer arrays that will store the
+            # matches for all galaxies in the step. As we go through
+            # the substeps, we will be filling these arrays with
+            # Galacticus indexes, dust_factors, luminosity factors,
+            # unmasked Galacticus indexes and Galacticus galaxy IDs
+            # (called node_indexes).
+
             abins = np.linspace(step_a, step2_a,substeps+1)
             abins_avg = dtk.bins_avg(abins)
             index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
@@ -2259,7 +2530,18 @@ def lightcone_resample(param_file_name):
             match_luminosity_factors = -1*np.ones(lc_data['redshift'].size,dtype='f4')
             match_library_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
             match_node_index = -1*np.ones(lc_data['redshift'].size,dtype='i8')
+
+            #######################
+            # Working on substeps #
+            #######################
+            
             for k in range(0, substeps):
+                # Now, we will go through each substep. First, we
+                # select which baseDC2 galaxies are in the substep
+                # that is being processed. I create a boolean array to
+                # select those galaxies and copy them over to a new
+                # dictionary-array (`lc_data_a`).
+
                 print("substep {}/{}".format(k, substeps))
                 # if it's a snapshot, we will select all galaxies
                 # within this one substep. There is no need for
@@ -2277,11 +2559,17 @@ def lightcone_resample(param_file_name):
                     slct_lc_abin = slct_lc_abins1 & slct_lc_abins2
                 print("\t\t num gals: {}/{}".format(np.sum(slct_lc_abin), slct_lc_abin.size))
 
-
+                # this is the baseDC2 galaxies for this substep
                 lc_data_a = dic_select(lc_data, slct_lc_abin)
                 if lc_data_a['redshift'].size == 0:
                     print("\t\t\t no galaxies for this redshift bin")
                     continue #nothing to match for this redshift bin
+
+                # Next, interpolate Galacticus to the middle redshift of the
+                # substep. For every dust factor (including the implicit x1), we
+                # calculate the effect of dust on each luminosity column and multiply
+                # that affect by the factor. A x1 factor will doesn't change anything a
+                # x0 factor will remove dust all together. 
                 if use_dust_factor:
                     gal_prop_list = [] 
                     for dust_factor in np.concatenate(([1.0],dust_factors)):
@@ -2291,24 +2579,34 @@ def lightcone_resample(param_file_name):
                             mask1, mask2, dust_factor, match_obs_color_red_seq,
                             cut_small_galaxies_mass = cut_small_galaxies_mass, snapshot=snapshot)
                         gal_prop_list.append(gal_prop_tmp2)
+                    #combining all dust factors into a single dictionary of arrays.
                     gal_prop_a = cat_dics(gal_prop_list)
-                # Find the closest Galacticus galaxy
+
+                #########################
+                # Finding the match up  #
+                #########################
+                
+                # This is the meat of the pipeline, finding the closest Galacticuse
+                # galaxy through `resample_index()`. 
                 index_abin = resample_index(lc_data_a, gal_prop_a, 
                                             ignore_mstar = ignore_mstar, 
                                             verbose = verbose, 
                                             ignore_bright_luminosity=ignore_bright_luminosity, 
                                             ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
                                             ignore_bright_luminosity_softness = ignore_bright_luminosity_softness)
-                #If we are matching on observed colors for cluster red seqence guys:
+                # If we are matching on observed colors for cluster
+                # red seqence guys, we repeat the processes with
+                # `resample_index_cluster_redsequence()` overwriting
+                # the matched indexes for cluster red sequence galaxies.
                 if match_obs_color_red_seq:
                     print("Matching on obs red seq")
                     #Create a lc_data with only cluster red sequence galaxies
-                    slct_clstr_red_squence = lc_data_a['is_cluster_red_sequence']
-                    if np.sum(slct_clstr_red_squence) > 0:
-                        lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_squence)
+                    slct_clstr_red_sequence = lc_data_a['is_cluster_red_sequence']
+                    if np.sum(slct_clstr_red_sequence) > 0:
+                        lc_data_a_crs = dic_select(lc_data_a, slct_clstr_red_sequence)
                         # Find the closest Galacticus galaxy as before but also match on 
                         # observed g-r, r-i, and i-z colors
-                        index_abin_crs = resample_index_cluster_red_squence(
+                        index_abin_crs = resample_index_cluster_red_sequence(
                             lc_data_a_crs, gal_prop_a, 
                             ignore_mstar = ignore_mstar,
                             verbose = verbose,
@@ -2316,25 +2614,35 @@ def lightcone_resample(param_file_name):
                             ignore_bright_luminosity_threshold = ignore_bright_luminosity_threshold,
                             ignore_bright_luminosity_softness = ignore_bright_luminosity_softness,
                             rs_scatter_dict = rs_scatter_dict)
-                        index_abin[slct_clstr_red_squence] = index_abin_crs
+                        # overwrite the old matched galacticus index
+                        # for cluster red sequence galaxies with the
+                        # specialized match up.
+                        index_abin[slct_clstr_red_sequence] = index_abin_crs
                     else:
-                        print("\tno red squence galaxies, so skipping...")
+                        print("\tno red sequence galaxies, so skipping...")
+
+                # We record addition info about the match. 
                 if use_dust_factor:
-                    # Get the Galacticus galaxy index, the division is to correctly
-                    # offset the index for the extra dust gal_prop 
+                    # Get the Galacticus galaxy index
                     index[slct_lc_abin] = gal_prop_a['index'][index_abin]
-                    # = index_abin%(index_abin.size//(1+len(dust_factors)))
                     # Record the dust factor for the matched galaxy so that it can be applied 
                     # to other columns in copy_columns()
                     match_dust_factors[slct_lc_abin] = gal_prop_a['dust_factor'][index_abin]
+                    # the orignal galacitucs index without the applied masks etc
                     match_library_index[slct_lc_abin] = gal_prop_a['index'][index_abin]
+                    # the galacticus node index galaxy id
                     match_node_index[slct_lc_abin] = gal_prop_a['node_index'][index_abin]
+                    # if we using the substep redshift for the
+                    # copy_columns function, set the redshift values
+                    # to the substep instead of keeping the original
+                    # redshift.
                     if use_substep_redshift:
                         lc_a_cc[slct_lc_abin] = abins_avg[k]
                 # By default use the same Galacticus luminosity
                 match_luminosity_factors[slct_lc_abin] = 1.0
-                # For the brightest galaxies, adjust all luminosities by the same factor
-                # so that the r-band matches
+                # For the brightest galaxies, adjust all luminosities
+                # by the same factor so that the r-band matches
+                # between baseDC2 and the Galacitucs galaxy pair.
                 if rescale_bright_luminosity:
                     slct_rescale_galaxies = lc_data_a['Mag_r'] < rescale_bright_luminosity_threshold
                     if np.sum(slct_rescale_galaxies) > 0:
@@ -2343,6 +2651,8 @@ def lightcone_resample(param_file_name):
                         slct_tmp = np.copy(slct_lc_abin)
                         slct_tmp[slct_lc_abin]=slct_rescale_galaxies
                         match_luminosity_factors[slct_tmp]=tmp
+
+                # some plots to check the quality of the matchup.
                 if plot_substep:
                     plot_differences(lc_data_a, gal_prop_a, index_abin);
                     plot_differences_obs_color(lc_data_a, gal_prop_a, index_abin);
@@ -2354,10 +2664,32 @@ def lightcone_resample(param_file_name):
                     #plot_clr_mag(lc_data, gal_prop_a, index_abin, mag_bins, 'clr_ri', 'r-i color')
                     plot_ri_gr_mag(lc_data_a, gal_prop_a, index_abin, mag_bins);
                     plt.show()
+
+            # Check that every baseDC2 galaxy has a match.
             slct_neg = index == -1
             print("assigned: {}/{}: {:.2f}".format( np.sum(~slct_neg), slct_neg.size, np.float(np.sum(slct_neg))/np.float(slct_neg.size)))
             assert(np.sum(slct_neg) == 0)
+
             
+        ##########################################################
+        # Start writing the writing the intermediate "step" file #
+        ##########################################################
+            
+        # We copy and interpolate Galacticus galaxy properties to the
+        # scale factor of the baseDC2 galaxy using the indexes found
+        # in the substep part.
+        
+        # Overwrite some properties from Galacticus for halo info, add
+        # host halo information, copy over UMachine properties from
+        # baseDC2 into a dedicated hdf5-group (groups are internal
+        # folders inside the hdf5 file). Add the blackhole
+        # quantities. Compute size quantities and ellipticities.
+        
+        # If we are dealing with healpix pixels, the process is almost
+        # the same except for copying galacticus properties, we write
+        # out to multiple healpix files instead of just one file. Then
+        # for each healpix file, we call the exactly the same
+        # functions for each healpixel file.
 
         if not(healpix_file):
             copy_columns_interpolation_dust_raw(gltcs_fname, output_step_loc, index, 
@@ -2385,6 +2717,8 @@ def lightcone_resample(param_file_name):
             add_size_quantities(output_step_loc)
             add_ellipticity_quantities(output_step_loc)
         else:
+            # if we are dealing with healpix pixels, we write out to
+            # multiple healpix files instead of just one.
             copy_columns_interpolation_dust_raw_healpix(gltcs_fname, output_step_loc, index, 
                                                         step, step2, step_a, step2_a, mask1, mask2, 
                                                         index_2to1, lc_a_cc, 
@@ -2397,8 +2731,10 @@ def lightcone_resample(param_file_name):
                                                         node_index = match_node_index, snapshot=snapshot)
 
             for healpix_pixel in healpix_pixels:
+                # File locations for the healpix file.
                 output_healpix_loc = output_step_loc.replace("${healpix}",str(healpix_pixel))
                 lightcone_healpix_fname =lightcone_step_fname.replace("${healpix}", str(healpix_pixel))
+                # Same functions calls for non-healpix pipeline
                 overwrite_columns(lightcone_healpix_fname, output_healpix_loc, ignore_mstar = ignore_mstar,
                                   verbose = verbose, cut_small_galaxies_mass = cut_small_galaxies_mass,
                                   internal_step = internal_file_step, fake_lensing=fake_lensing, step = step, 
@@ -2418,6 +2754,7 @@ def lightcone_resample(param_file_name):
                 add_size_quantities(output_healpix_loc)
                 add_ellipticity_quantities(output_healpix_loc)
 
+        # Some quality check plots
         if plot:
             if healpix_file:
                 output_step_tmp = output_step_loc.replace("${healpix}", str(healpix_pixels[-1]))
@@ -2458,8 +2795,16 @@ def lightcone_resample(param_file_name):
     # Concatenation of the all steps into a single catalog #
     ######################################################## 
 
+    # Finally we concatenate all intermediate "step" files into a single
+    # catalog file. After the concatenation, we add metadata to the final
+    # catalog file.
+    
+    # Again for the healpix pixel run we repeat the process, but for each
+    # healpix pixel individually.
+
     if not(healpix_file):
         output_all = output_fname.replace("${step}","all")
+        # if we doing a 
         if not metadata_only:
             combine_step_lc_into_one(output_step_list, output_all)
         add_metadata(gltcs_metadata_ref, output_all, version_major,
